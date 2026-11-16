@@ -1,5 +1,7 @@
 # Ball possession from tracking — technical document
 
+**Team: Average Guys**
+
 **More Than A Hack 2027 · FC Barcelona vs Athletic Club · tactical recording, 199,319 frames**
 
 Per-frame possession produced by a two-stage model trained entirely on open-access tracking of
@@ -369,7 +371,7 @@ Full instructions, including re-fitting the models from the external data, are i
 ```bash
 python -m pip install -r requirements.txt
 python local_checks/consolidate_data.py --source <download folder> --data-dir ./data
-python submit/run_submission.py --team-name <team_name> --data-dir ./data
+python submit/run_submission.py --team-name "Average Guys" --data-dir ./data
 ```
 
 Three minutes, and it runs the organisers' own `validate_submission.py` on what it wrote.
@@ -382,7 +384,7 @@ submission itself are excluded by rules that override every whitelist above them
 
 | | |
 |---|---|
-| submitted file | `<team_name>.csv`, 199,319 data rows |
+| submitted file | `Average Guys.csv`, 199,319 data rows |
 | SHA-256 | `8296efaf8cb3374cd24eb02f0cd302944fa1f980b4f88272724abc46a575bd5d` |
 | label counts | `H` 46,055 · `A` 34,061 · `D` 78,741 · `X` 40,462 |
 | frozen models | `submit/models/`, with `manifest.json` recording features, rows and parameters |

@@ -54,7 +54,7 @@ python local_checks/consolidate_data.py --source <download folder> --data-dir ./
 Then one command produces and validates the file:
 
 ```bash
-python submit/run_submission.py --team-name <team_name> --data-dir ./data
+python submit/run_submission.py --team-name "Average Guys" --data-dir ./data
 ```
 
 It prints a SHA-256 of what it wrote. The submitted file's digest is in
