@@ -130,6 +130,22 @@ D:\Football Hackathon\
 │   ├─ render_case.py                    draws a case as top-down pitch views
 │   ├─ predictions/<match>.parquet       per-frame probability and decoded output
 │   └─ cases/*.png                       rendered failure cases for inspection
+├─ submit/                               THE SUBMISSION: the only part that reads competition
+│   │                                    formats, and the only part that touches this match
+│   ├─ atd_to_canonical.py               ATD pair -> canonical frames + players, plus the ball
+│   │                                    track on the stretches with no play. Writes no label
+│   ├─ fit_final.py                      refits stage 2 + stage 3 on all five development
+│   │                                    matches and freezes them with a manifest
+│   ├─ predict_match.py                  frozen models -> <team_name>.csv. Decodes per half,
+│   │                                    and falsifies the ball rules before using them
+│   ├─ run_submission.py                 all of the above, then the organisers' validator
+│   ├─ models/                           COMMITTED: the two boosters, the duration priors and
+│   │                                    manifest.json. 5 MB, so the file reproduces from the
+│   │                                    data bundle alone with no retraining
+│   ├─ processed/BAR-ATH/*.parquet       RESTRICTED - derived from the match data, never committed
+│   ├─ work/                             RESTRICTED - features and the refined output
+│   └─ out/<team_name>.csv               the submission. Not committed; regenerated instead,
+│                                        with a published SHA-256 to check a reproduction
 ├─ stage3/                               STAGE 3: which team is in control
 │   ├─ features_team.py                  direction inferred from data; ball features carry an
 │   │                                    explicit observed flag and go NaN when absent
@@ -228,16 +244,66 @@ flowchart LR
   B --> C["data/tactical<br/>data/broadcast"]
   C --> D["check_assets.py<br/>offline verification"]
   D --> E["local_checks/reports/<br/>read by a human only"]
-  C --> F["Future: possession pipeline<br/>(not built yet)"]
-  F --> G["frame,label CSV<br/>199,319 rows"]
-  G --> H["validate_submission.py"]
+  C --> F["atd_to_canonical.py<br/>ATD pair -> canonical parquet"]
+  F --> G["stage2/features.py<br/>169 features, players only"]
+  F --> H["stage3/features_team.py<br/>+ pitch_control.py, 56 features"]
+  G --> I["stage2_dead.txt<br/>-> HSMM -> dead/alive"]
+  H --> J["stage3_team.txt<br/>-> HSMM -> H/A"]
+  I --> K["restart_logic.refine_period<br/>12 rules, guarded"]
+  J --> K
+  K --> L["frame,label CSV<br/>199,319 rows"]
+  L --> M["validate_submission.py"]
 ```
 
 Nothing from `data/` or from the reports is sent anywhere.
 
+### The submission path
+
+One command, about three minutes, from the delivered bundle to a validated file:
+
+```bash
+python submit/run_submission.py --team-name <team_name> --data-dir ./data
+```
+
+`submit/` is the only part of the project that knows what the competition's file formats are.
+Everything upstream of it reads the canonical schema and cannot tell which provider a row came
+from, which is what let the models built on open-access tracking run on this match unchanged.
+
+| file | what it does |
+|---|---|
+| `submit/atd_to_canonical.py` | the **only** file that reads the Metrica EPTS format. ATD pair → `frames.parquet` + `players.parquet` in the canonical schema, plus the ball track on the ungraded stretches. Writes `label` as null on every row, because this match has none. Reproduces every documented figure exactly: 199,319 records, 158,857 graded frames, ball on 94,214 (59.3%), 20.5 objects tracked per frame |
+| `submit/fit_final.py` | refits stage 2 and stage 3 on **all five** development matches and freezes them to `submit/models/` with a manifest. A LOMO fold is a model that ignores a fifth of the data and there are five of them; the frozen one is trained on all of it. Masking spread gains a fifth rate (0.41) so the frozen model does not see a *more* visible ball than the measured folds did |
+| `submit/predict_match.py` | frozen models → `<team_name>.csv`. Decodes **per half**, because the two graded blocks are 20,156 frames apart and adjacent in the array. Tests the ball rules before using them (below) |
+| `submit/run_submission.py` | all of it in order, then the organisers' own validator, then a SHA-256 of what it wrote |
+
+### The ball-rule guard — rules are tested on this input before they are trusted
+
+The transfer failure that mattered most, found by running the pipeline rather than by reasoning
+about it. The training provider **freezes the ball's coordinate while play is stopped** — on
+47–51% of consecutive observed frames the ball's position is byte-identical to the previous one,
+so a dead ball reads exactly `0.00 m/s`. The competition's ATD is uncorrected computer vision
+that re-detects the ball every frame and essentially never repeats a position, with detection
+hopping between objects.
+
+Every rule built on a one-frame speed difference therefore behaves differently here:
+
+| rule | on the training matches | on this match |
+|---|---|---|
+| `ball_at_rest` fires | 22% of frames | **1.6%** |
+| `ball_in_play` claims play is going on, where there is none | **0.00%** of reference-dead frames | **76% of half-time** |
+
+So `predict_match.py` tests each ball-reading rule against the three stretches where no football
+is being played — before kickoff, half-time, after the final whistle — whose boundaries `DATA.md`
+publishes and which carry **no label at all**. Any rule those stretches falsify is dropped, and
+the run says so in its own output. On this match it drops `ball_in_play` and keeps the other
+twelve. On the training provider it drops nothing, and the development scores are bit-identical
+with the guard in place. Averaging the speed over a one-second window was implemented, measured
+and found not to rescue it (`restart_logic.ball_speed`, `--speed-win`): this is wrong data, not
+noise. Left unguarded the rule erased about a quarter of the match's stoppages.
+
 ---
 
-## The recommended solution architecture (proposed, not built)
+## The solution architecture (built; see *Data flow* for the submission path)
 
 ```mermaid
 flowchart LR
@@ -309,6 +375,18 @@ or `build_primer.js`, then run `export.ps1` with that document's `-Pptx`, `-Pdf`
 powershell -ExecutionPolicy Bypass -File "D:\Football Hackathon\deck\export.ps1"
 ```
 
+Produce and validate the submission (needs the data bundle; about three minutes):
+
+```bash
+python submit/run_submission.py --team-name <team_name> --data-dir "D:\Football Hackathon\data"
+```
+
+Re-fit and re-freeze the two models from the external training data:
+
+```bash
+python submit/fit_final.py
+```
+
 Run the Model Failure Review tool (local, loopback only):
 
 ```bash
@@ -367,8 +445,13 @@ explicit about this.
 | Challenge repository reviewed | Complete — all 34 files at `f8f2629` |
 | Official scorer reproduced | Yes — published public-window board matches to 4 dp |
 | Public CSVs parsed and validated | Yes — all 5, all 199,319 rows, all pass |
-| Match assets verified | **Filenames and sizes only** — contents not opened (rules) |
-| Local verification scripts | Written, compile-checked; not yet run against the data |
+| Match assets verified | **Complete 16 Nov 2026** — all nine placed by `consolidate_data.py`, and the adapter reproduces every figure `DATA.md` publishes: 199,319 ATD records, 158,857 graded frames, ball on 94,214 (59.3%), 46 track slots, 20.5 tracked per frame, H = Barcelona |
+| Local verification scripts | Written and **run** — `consolidate_data.py` placed 9 of 9 files; the adapter's own checks all PASS |
+| **DELIVERABLE 1 — possession file** | **Built and validated 16 Nov 2026.** 199,319 rows, passes the organisers' `validate_submission.py`. `H` 46,055 · `A` 34,061 · `D` 78,741 · `X` 40,462 (all 40,462 ungraded frames abstained). Reproduces in ~3 min from the bundle; SHA-256 printed by the run. **Awaiting the team name for the filename** |
+| **DELIVERABLE 2 — public repository** | **Live 16 Nov 2026** — `github.com/ronaksu/Football-Hackathon`, 86 files, 7.2 MB. `.gitignore` is a **whitelist**: everything excluded unless named, with hard exclusions last that override it, so the bundle, every derived file, the submission itself and the draft data-request letter (real name and contact details) are all out. The two frozen models **are** committed, so the file reproduces from the bundle alone |
+| **DELIVERABLE 3 — technical document** | **Written 16 Nov 2026** (`TECHNICAL_DOCUMENT.md`). All six required sections: approach, assets used *and dropped*, training data with provenance, the possession rules, limitations, reproduction |
+| **Ball-rule guard** | **Built 16 Nov 2026.** Ball-reading rules are falsified against the stretches with no play before being used; reads no ground truth. Drops `ball_in_play` on this match, nothing on the training provider. See *Data flow* above — without it, a quarter of the match's stoppages were being erased |
+| Public five-minute check | **Run once, 16 Nov 2026, after the model was frozen and after the guard was decided.** spellF1 **0.533**, macroF1 **0.886**, `D` recall 0.961, alive/dead F1 0.975, home-share error **0.0003**, team accuracy 0.865 on live frames (0.855 measured on development data). Published baseline `smooth50` on the same window: 0.326 / 0.621. **Used only to confirm the frames line up, H/A are not swapped and direction inference is right. Nothing was changed in response to it, and it is not a tuning set — 17 possessions cannot rank anything** |
 | Strategy deck | Delivered (`.pptx` + `.pdf`, 23 main slides + 5 appendix) |
 | Blockers document | Delivered (`.pptx` + `.pdf`, 10 pages) |
 | Plain-language primer | Delivered (`.pptx` + `.pdf`, 2 pages) |
