@@ -1,0 +1,1659 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where the model goes wrong</title>
+<style>
+  :root{
+    --bg:#ffffff; --ink:#11161f; --muted:#5b6878; --line:#d7dee8; --tint:#f1f4f8;
+    --home:#004d98; --away:#ee2523; --dead:#8795a6; --ok:#0e7c66; --warn:#9a6208; --bad:#b01b1b;
+    --navy:#1b2a4a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 Calibri,Segoe UI,system-ui,sans-serif;color:var(--ink);
+       background:var(--bg)}
+  header{display:flex;align-items:baseline;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line)}
+  header h1{margin:0;font:700 17px Cambria,Georgia,serif;color:var(--navy)}
+  header .sub{color:var(--muted);font-size:12px}
+  nav{margin-left:auto;display:flex;gap:4px}
+  nav button{font:600 12px Calibri,sans-serif;padding:5px 12px;border:1px solid var(--line);
+             background:#fff;border-radius:5px;cursor:pointer;color:var(--muted)}
+  nav button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .wrap{display:grid;grid-template-columns:272px 1fr 396px;gap:12px;padding:12px 16px;
+        height:calc(100vh - 52px)}
+  /* min-width:0 so the 900px canvas cannot stop the middle column from shrinking */
+  .panel{border:1px solid var(--line);border-radius:7px;overflow:hidden;display:flex;
+         flex-direction:column;min-height:0;min-width:0}
+  .panel h2{margin:0;padding:7px 10px;font:700 10.5px Calibri,sans-serif;letter-spacing:1.1px;
+            text-transform:uppercase;color:var(--muted);background:var(--tint);
+            border-bottom:1px solid var(--line)}
+  /* every panel folds away from its own heading, so one long list cannot hide the rest */
+  .panel h2.fold{cursor:pointer;user-select:none}
+  .panel h2.fold:hover{color:var(--navy)}
+  .panel h2.fold .caret{display:inline-block;width:11px;color:var(--navy);
+      transition:transform .12s}
+  .panel.shut{flex:0 0 auto}
+  .panel.shut > *:not(h2){display:none}
+  .panel.shut h2 .caret{transform:rotate(-90deg)}
+  .scroll{overflow:auto;min-height:0;flex:1}
+  .note{font-size:11px;color:var(--muted)}
+
+  /* ---------------------------------------------------------------- the list */
+  .filters{padding:8px 10px;border-bottom:1px solid var(--line);display:grid;gap:6px;
+      flex:0 0 auto}
+  #list{min-height:140px}
+  .filters select{width:100%;font:12px Calibri,sans-serif;padding:4px 6px;
+      border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--ink)}
+  .case{padding:8px 10px;border-bottom:1px solid #eef2f6;cursor:pointer;font-size:12.5px}
+  .case:hover{background:#f7fafc}
+  .case.on{background:#e8eef7}
+  .case .k{font-weight:700;color:var(--navy)}
+  .case .m{color:var(--muted);font-size:11px}
+  .mark{font-weight:700;margin-right:3px}
+  .mark.ok{color:var(--ok)} .mark.bad{color:var(--bad)}
+  .star{color:var(--warn)}
+
+  /* ------------------------------------------------------------- the replay */
+  #stage{display:block;width:100%;max-width:100%;height:auto;background:#f4f8fb}
+  .controls{display:flex;align-items:center;gap:8px;padding:7px 10px;border-top:1px solid var(--line);
+            border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .controls button{font:600 12px Calibri,sans-serif;padding:4px 10px;border:1px solid var(--line);
+            background:#fff;border-radius:5px;cursor:pointer}
+  .controls button.primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+  #scrub{flex:1;min-width:120px}
+  .speed{display:flex;gap:3px}
+  .speed button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  #bands{display:block;width:100%;height:66px}
+  .legend{display:flex;gap:12px;padding:6px 10px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px;
+      margin-right:4px}
+
+  /* ----------------------------------------------------- the plain read-out */
+  .vcard{padding:11px 12px;border-bottom:1px solid var(--line);background:#fdeeee}
+  .vcard.ok{background:#e9f6f2}
+  .vcard .tagline{font:700 10px Calibri,sans-serif;letter-spacing:1px;text-transform:uppercase;
+       color:var(--bad)}
+  .vcard.ok .tagline{color:var(--ok)}
+  .vcard h3{margin:2px 0 0;font:700 17px Cambria,Georgia,serif;color:var(--navy)}
+  .vcard p{margin:5px 0 0;font-size:13px}
+  .vcard .where{margin-top:6px;font-size:11.5px;color:var(--muted)}
+
+  .sec{padding:10px 12px;border-bottom:1px solid var(--line)}
+  .sec h4{margin:0 0 7px;font:700 10.5px Calibri,sans-serif;letter-spacing:1px;
+          text-transform:uppercase;color:var(--muted)}
+  .srow{display:grid;grid-template-columns:86px 1fr;gap:7px;align-items:center;margin-bottom:5px}
+  .srow .lab{font-size:11.5px;color:var(--muted);text-align:right}
+  .track{position:relative;height:24px;border-radius:4px;background:#eef2f7;overflow:hidden}
+  .track i{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;
+     font:700 10px Calibri,sans-serif;color:#fff;overflow:hidden;white-space:nowrap}
+  .gap{margin-top:7px;font-size:13px;font-weight:700;color:var(--bad)}
+  .gap.ok{color:var(--ok)}
+  .keys{display:flex;gap:10px;margin-top:6px;font-size:10.5px;color:var(--muted)}
+  .keys span i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:3px}
+
+  .mc{display:grid;grid-template-columns:66px 1fr;gap:9px;padding:9px 0;
+      border-top:1px solid #eef2f6}
+  .mc:first-of-type{border-top:0}
+  .chip{font:700 9px Calibri,sans-serif;letter-spacing:.6px;background:var(--navy);color:#fff;
+        border-radius:4px;padding:4px 4px;text-align:center;height:fit-content}
+  .chip.grey{background:#8795a6}
+  .mc h5{margin:0;font:700 13px Calibri,sans-serif}
+  .mc p{margin:2px 0 5px;font-size:12px;color:var(--muted)}
+  .meter{display:grid;grid-template-columns:50px 1fr 62px;gap:5px;align-items:center;
+         font-size:10.5px;color:var(--muted);margin-bottom:2px}
+  .meter .mb{height:9px;background:#e7edf4;border-radius:5px;position:relative}
+  .meter .mb i{position:absolute;left:0;top:0;bottom:0;border-radius:5px}
+  .meter b{font:700 10.5px Consolas,monospace;color:var(--ink)}
+  .flag{font:700 10px Calibri,sans-serif;padding:2px 7px;border-radius:9px;display:inline-block;
+        margin-top:3px}
+  .flag.miss{background:#fdecec;color:var(--bad)}
+  .flag.used{background:#e6f5f0;color:var(--ok)}
+  .flag.na{background:#eef2f7;color:var(--muted)}
+  .flag.other{background:#fff6e6;color:var(--warn)}
+
+  .gwrap{margin-top:3px}
+  .gbar{position:relative;height:26px;border-radius:5px;background:#e7edf4;overflow:hidden}
+  .gbar i{position:absolute;left:0;top:0;bottom:0;background:var(--navy)}
+  .gbar u{position:absolute;top:0;bottom:0;width:2px;background:#d98a14}
+  .glab{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin-top:3px}
+  .gsay{margin-top:6px;font-size:12.5px}
+
+  .gone{margin:0;padding:8px 10px;background:#eef6ee;border-bottom:1px solid #bcd8bc;
+      font-size:12px;color:#24481f;max-height:34vh;overflow:auto;flex:0 0 auto}
+  .gone b{display:block;font-weight:700}
+  .gone summary{cursor:pointer;list-style:none}
+  .gone summary::-webkit-details-marker{display:none}
+  .gone summary b:after{content:' be';color:#3d6b35}
+  .gone details[open] summary b:after{content:' b4'}
+  .gone .gonerow{margin-top:4px}
+  .gone code{font:600 11px Consolas,monospace;color:#3d6b35}
+  .gone span{display:block;font-style:italic;color:#44603f}
+  .plain{margin:9px 0 2px;padding:9px 11px;background:#fff;border:1px solid #d7e0ea;
+      border-left:3px solid var(--navy);border-radius:5px;font-size:13px;line-height:1.5;
+      color:var(--ink)}
+  .plain>b{display:block;font:700 9.5px Calibri,sans-serif;letter-spacing:1px;
+      text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+  .plain p{margin:0 0 7px}
+  .plain p:last-of-type{margin-bottom:0}
+  .reads{display:flex;flex-wrap:wrap;gap:4px 5px;margin-top:8px}
+  .reads span{font:11px Consolas,monospace;background:#f2f6fa;border:1px solid #dbe4ee;
+      border-radius:3px;padding:1px 6px;color:#31465c;white-space:nowrap}
+  .reads i{font-style:normal;color:var(--muted);margin-right:5px}
+  .cric{margin-top:9px;padding-top:8px;border-top:1px dashed #cfdae6;font-size:12.5px;
+      color:#4c5c3d;line-height:1.5}
+  .cric b{display:inline;font:700 9.5px Calibri,sans-serif;letter-spacing:1px;
+      text-transform:uppercase;color:#6d7f58;margin-right:6px;vertical-align:1px}
+  .newtag{font:700 9px Calibri,sans-serif;letter-spacing:.6px;background:#9a6208;color:#fff;
+      border-radius:3px;padding:1px 4px;vertical-align:1px}
+  .regblk{padding:11px 12px;background:#fdf4e7;border-top:1px solid #d98a14;
+      border-bottom:1px solid #d98a14}
+  .regblk .tagline{font:700 10px Calibri,sans-serif;letter-spacing:1px;text-transform:uppercase;
+      color:#8a5a00}
+  .regblk h5{margin:3px 0 5px;font:700 14px Cambria,Georgia,serif;color:var(--navy)}
+  .regblk p{margin:0 0 6px;font-size:12.5px;color:#4a3406}
+  .regblk .ba{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:7px 0}
+  .regblk .ba div{background:#fff;border:1px solid #e6d6bb;border-radius:5px;padding:6px 8px}
+  .regblk .ba .h{font:700 9.5px Calibri,sans-serif;letter-spacing:.7px;text-transform:uppercase;
+      color:var(--muted)}
+  .regblk .ba b{font:700 15px Consolas,monospace}
+  .regblk .fix{background:#fff;border-left:3px solid #d98a14;padding:7px 9px;font-size:12.5px;
+      color:#4a3406}
+  .rk{display:inline-block;font:700 10px Calibri,sans-serif;letter-spacing:.7px;
+      text-transform:uppercase;background:#1b2a4a;color:#fff;border-radius:4px;padding:3px 7px}
+  .rrow{display:flex;justify-content:space-between;gap:8px;padding:2px 0;font-size:12.5px}
+  .rrow b{font-family:Consolas,monospace;font-weight:400}
+  .sw{margin-top:6px}
+  .swi{display:grid;grid-template-columns:46px 1fr;gap:7px;font-size:12px;padding:3px 0;
+       border-top:1px solid #eef2f6}
+  .swi .tm{font:700 11px Consolas,monospace;color:var(--muted);text-align:right}
+  .lesson{padding:11px 12px;background:#fff8e1;border-top:1px solid var(--line);
+          border-bottom:1px solid var(--line)}
+  .lesson .tagline{font:700 10px Calibri,sans-serif;letter-spacing:1px;text-transform:uppercase;
+          color:#8a5a00}
+  .lesson p{margin:4px 0 0;font-size:13px;color:#4a3406}
+
+  details.deep{border-top:1px solid var(--line)}
+  details.deep summary{cursor:pointer;padding:8px 12px;font:600 12px Calibri,sans-serif;
+          color:var(--muted);background:var(--tint)}
+  details.deep summary:hover{color:var(--navy)}
+
+  /* -------------------------------------------------- the detail, folded away */
+  table.frame{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.frame td{padding:3px 10px;border-bottom:1px solid #eef2f6;vertical-align:top}
+  table.frame td.k{color:var(--muted);width:46%}
+  table.frame td.v{font-family:Consolas,monospace;font-size:12px}
+  .why{padding:8px 10px;background:#fff6e6;border-top:1px solid var(--line);font-size:12.5px;
+       color:#5a3d08}
+  .blk{padding:8px 10px;border-top:1px solid var(--line);font-size:12.5px}
+  .blk h4{margin:0 0 5px;font:700 10.5px Calibri,sans-serif;letter-spacing:1px;
+          text-transform:uppercase;color:var(--muted)}
+  .blk .ln{display:flex;justify-content:space-between;gap:8px;padding:1.5px 0}
+  .blk .ln b{font-family:Consolas,monospace;font-weight:400}
+  .blk .good{color:var(--ok);font-weight:700}
+  .blk .bad{color:var(--bad);font-weight:700}
+  .blk table{font-size:12px;margin-top:4px;width:100%;border-collapse:collapse}
+  .blk td{padding:2px 4px;border-bottom:1px solid #eef2f6}
+  .cue .pt{font-family:Consolas,monospace;font-weight:700}
+  .cue .yes{color:var(--ok);font-weight:700}
+  .cue .no{color:var(--bad);font-weight:700}
+  .bal{display:flex;align-items:center;gap:6px;margin:5px 0 2px}
+  .bal .seg{height:16px;border-radius:3px}
+  .why2{background:#eef3fa;border-top:1px solid var(--line);padding:8px 10px;font-size:12.5px;
+        color:#1b2a4a}
+  .tbar{position:relative;height:11px;border-radius:3px;background:#e9eef4;margin:3px 0 1px}
+  .tbar i{position:absolute;top:0;bottom:0;border-radius:3px}
+  .tlab{font-size:10.5px;color:var(--muted)}
+
+  /* ------------------------------------------------------------- feedback */
+  .fb{padding:9px 10px;border-top:1px solid var(--line);display:grid;gap:6px;background:#fafcfe}
+  .fb textarea{width:100%;height:52px;font:12.5px Calibri,sans-serif;padding:5px;
+      border:1px solid var(--line);border-radius:4px;resize:vertical}
+  .fb .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .fb button{font:600 12px Calibri,sans-serif;padding:4px 10px;border:1px solid var(--line);
+      background:#fff;border-radius:5px;cursor:pointer}
+  .fb button.on{background:var(--ok);color:#fff;border-color:var(--ok)}
+  .fb select{font:12px Calibri,sans-serif;padding:4px;border:1px solid var(--line);border-radius:4px}
+  .saved{font-size:11.5px;color:var(--ok)}
+
+  /* ----------------------------------------------------------- guided demo */
+  #demo{display:none;padding:14px 16px;overflow:auto;height:calc(100vh - 52px)}
+  .demowrap{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:18px;max-width:1420px}
+  #demovid{width:100%;border:1px solid var(--line);border-radius:7px;background:#000}
+  .demoside h3{font:700 16px Cambria,Georgia,serif;color:var(--navy);margin:0 0 6px}
+  .demoside p{margin:0 0 10px;font-size:13px;color:var(--ink)}
+  .demoside ol{margin:0 0 10px 18px;padding:0;font-size:12.5px;color:var(--ink)}
+  .demoside li{margin-bottom:5px}
+  .demoside .ok{color:var(--ok);font-weight:700}
+  .demoside .bad{color:var(--bad);font-weight:700}
+
+  /* --------------------------------------------------------------- patterns */
+  #patterns,#score{display:none;padding:14px 16px;overflow:auto;height:calc(100vh - 52px)}
+  #patterns h3,#score h3{font:700 15px Cambria,Georgia,serif;color:var(--navy);margin:18px 0 6px}
+  #patterns table,#score table{border:1px solid var(--line);border-radius:6px;overflow:hidden;
+      width:100%;border-collapse:collapse;max-width:1100px}
+  #patterns th,#score th{background:var(--tint);text-align:left;padding:5px 10px;font-size:11px;
+      letter-spacing:.7px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line)}
+  #patterns td,#score td{font-family:Consolas,monospace;font-size:12px;padding:4px 10px;
+      border-bottom:1px solid #eef2f6}
+  #patterns td.name,#score td.name{font-family:Calibri,sans-serif;font-weight:600;color:var(--navy)}
+  /* the one table: a band row introduces each half of it, and a case row is a link to its cases */
+  #score td.what{font-family:Calibri,sans-serif;color:var(--muted);font-size:11.5px}
+  #score tr.band td{background:var(--tint);font:700 10.5px Calibri,sans-serif;letter-spacing:1.1px;
+      text-transform:uppercase;color:var(--navy);padding:7px 10px}
+  #score tr.go{cursor:pointer}
+  #score tr.go:hover td{background:#eef4fa}
+  #score td.up{color:#0e7c66}
+  #score td.down{color:#b01b1b}
+  #score td.flat{color:var(--muted)}
+  .bar{height:7px;border-radius:4px;background:#e3e9f0;position:relative;min-width:60px}
+  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--bad)}
+  .caution{background:#fff6e6;border:1px solid #d98a14;border-radius:6px;padding:10px 12px;
+      margin:12px 0;font-size:12.5px;color:#5a3d08;max-width:980px}
+  .top3{display:grid;gap:8px;max-width:980px;margin:10px 0 4px}
+  .t3{display:grid;grid-template-columns:1fr 150px;gap:10px;align-items:center;
+      border:1px solid var(--line);border-radius:6px;padding:9px 11px}
+  .t3 b{font-size:13.5px;color:var(--navy)}
+  .t3 .sm{font-size:11.5px;color:var(--muted)}
+  .t3 .big{font:700 20px Consolas,monospace;color:var(--bad);text-align:right}
+</style>
+</head>
+<body>
+<header>
+  <h1>Where the model goes wrong</h1>
+  <span class="sub">one case at a time, in plain words &middot; development matches only &middot; runs on your machine</span>
+  <nav>
+    <button id="tabDemo">&#9654; Watch this first</button>
+    <button id="tabScore">How it is doing</button>
+    <button id="tabCases" class="on">Cases</button>
+    <button id="tabPatterns">What goes wrong most</button>
+  </nav>
+</header>
+
+<div class="wrap" id="casesView">
+  <!-- ---------------------------------------------------------------- list -->
+  <section class="panel">
+    <h2>Pick a case <span id="count" style="float:right;font-weight:400"></span></h2>
+    <div class="gone" id="gone" style="display:none"></div>
+    <div class="filters">
+      <select id="fBucket">
+        <option value="correct">&#10004; cases it got RIGHT &mdash; start here</option>
+        <option value="failure" selected>&#10006; cases it got WRONG</option>
+        <option value="new">&#9888; NEW since the latest change &mdash; what it broke</option>
+        <option value="">everything</option>
+      </select>
+      <select id="fKind"><option value="">any kind of mistake</option></select>
+      <select id="fMatch"><option value="">any match</option></select>
+      <select id="fBall">
+        <option value="">whether the ball was visible or not</option>
+        <option value="seen">&#9900; the ball was IN SIGHT &mdash; the ones I can judge</option>
+        <option value="part">the ball was half in sight</option>
+        <option value="blind">the ball was mostly hidden &mdash; nothing to see</option>
+      </select>
+      <label class="note"><input type="checkbox" id="fBook" style="width:auto"> only the ones I starred</label>
+    </div>
+    <div class="scroll" id="list"></div>
+  </section>
+
+  <!-- -------------------------------------------------------------- replay -->
+  <section class="panel">
+    <h2 id="caseTitle">Pick a case on the left</h2>
+    <canvas id="stage" width="900" height="620"></canvas>
+    <div class="controls">
+      <button id="play" class="primary">Play</button>
+      <button id="back">&#9664; step</button>
+      <button id="fwd">step &#9654;</button>
+      <input type="range" id="scrub" min="0" max="0" value="0">
+      <span class="speed">
+        <button data-s="0.25">0.25&times;</button>
+        <button data-s="0.5">0.5&times;</button>
+        <button data-s="1" class="on">1&times;</button>
+        <button data-s="2">2&times;</button>
+      </span>
+    </div>
+    <canvas id="bands" width="900" height="66"></canvas>
+    <div class="legend">
+      <span><i class="sw" style="background:#004d98"></i>home</span>
+      <span><i class="sw" style="background:#ee2523"></i>away</span>
+      <span><i class="sw" style="background:#8795a6"></i>ball dead</span>
+      <span><i class="sw" style="background:#fff;border:2px solid #1b2a4a"></i>the ball</span>
+      <span><i class="sw" style="background:#d98a14"></i>ball hidden from the model</span>
+      <span id="mediaNote" class="note"></span>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------- read-out -->
+  <section class="panel">
+    <h2>What happened here</h2>
+    <div class="scroll">
+      <div class="vcard" id="verdict"><p class="note">Pick a case and this fills in.</p></div>
+      <div class="sec" id="sbs"></div>
+      <div class="regblk" id="regblk" style="display:none"></div>
+      <div class="sec" id="restartblk"></div>
+      <div class="sec" id="missed"></div>
+      <div class="sec" id="gauge"></div>
+      <div class="lesson" id="lesson"></div>
+
+      <details class="deep" id="deep">
+        <summary>Show all the numbers (frame table, the model&rsquo;s arithmetic, timing, ball)</summary>
+        <table class="frame" id="data"></table>
+        <div class="why" id="why"></div>
+        <div class="blk" id="rationale"></div>
+        <div class="blk" id="timing"></div>
+        <div class="blk" id="ballblk"></div>
+      </details>
+    </div>
+    <div class="fb">
+      <div class="row">
+        <button id="book">&#9734; Star this</button>
+        <select id="verdictSel">
+          <option value="">my call&hellip;</option>
+          <option value="model_wrong">the model is wrong</option>
+          <option value="reference_wrong">the reference is wrong</option>
+          <option value="ambiguous">honestly unclear</option>
+          <option value="not_an_error">not a mistake at all</option>
+        </select>
+        <select id="proposed">
+          <option value="">should have said&hellip;</option>
+          <option value="H">home</option>
+          <option value="A">away</option>
+          <option value="D">ball dead</option>
+          <option value="X">no opinion</option>
+        </select>
+      </div>
+      <textarea id="comment" placeholder="What do you see here? What should the model have noticed?"></textarea>
+      <div class="row">
+        <button id="save">Save</button>
+        <span class="saved" id="savedMsg"></span>
+      </div>
+      <div class="note">Typing saves itself a second after you stop, and again when you click
+        away &mdash; nothing is lost by switching case. Saved for review only: nothing here
+        becomes a training label until it has been read and accepted deliberately.</div>
+    </div>
+  </section>
+</div>
+
+<div id="demo">
+  <div class="demowrap">
+    <video id="demovid" controls preload="metadata" poster="demo/stills/01_title.png">
+      <source src="demo/model_demo.mp4" type="video/mp4">
+    </video>
+    <div class="demoside">
+      <h3>Two stoppages, 2 min 48 s</h3>
+      <p>Both from the first half of the same match, almost the same length. The model catches one
+         to within a fifth of a second and misses the other completely. The video shows what was
+         different about them.</p>
+      <ol>
+        <li><b>00:00</b> what the model is given.</li>
+        <li><b>00:25</b> <span class="ok">Case 1, 35:56</span> &mdash; a 9.2 s stop, caught.
+            Whistle 0.08 s early, restart 0.16 s late.</li>
+        <li><b>01:05</b> how the score is worked out.</li>
+        <li><b>01:20</b> <span class="bad">Case 2, 06:46</span> &mdash; a 7.4 s stop, missed
+            completely. Watch how unsure it stays.</li>
+        <li><b>02:00</b> the two side by side, and why one worked.</li>
+        <li><b>02:20</b> wrong-team cases, the ball, and what the timing costs.</li>
+      </ol>
+      <p class="note">Watch this first, then open a case on the <b>Cases</b> tab &mdash; it shows
+         the same things for every case.</p>
+    </div>
+  </div>
+</div>
+
+<div id="score"></div>
+<div id="patterns"></div>
+
+<script>
+const S = {idx:[], cases:[], cur:null, data:null, i:0, playing:false, speed:1, fb:{}, last:0};
+const COL = {H:'#004d98', A:'#ee2523', D:'#8795a6', X:'#d98a14'};
+const TEAM = {H:'home', A:'away', D:'nobody — ball dead', X:'no answer'};
+
+const $ = s => document.querySelector(s);
+const fmt = v => v===null||v===undefined ? '—' : (typeof v==='number' ? v.toFixed(3) : v);
+const mean = a => { const v=a.filter(x=>x!==null&&x!==undefined&&!isNaN(x));
+                    return v.length ? v.reduce((x,y)=>x+y,0)/v.length : null; };
+const pc = v => v===null ? '—' : Math.round(v*100)+'%';
+
+/* Plain names for the case types. The code names stay in the data; nothing on this page
+   should need a glossary to read. */
+const KIND = {
+  MISSED_STOP:    {t:'Missed a stop',               ok:false},
+  SPELL_MERGE:    {t:'Ran two possessions together', ok:false},
+  INVENTED_STOP:  {t:'Invented a stop',             ok:false},
+  BOUNDARY:       {t:'Found the stop, wrong edges', ok:false},
+  WRONG_TEAM:     {t:'Wrong team on the ball',      ok:false},
+  MISSED_CHANGE:  {t:'Missed the ball changing hands', ok:false},
+  FALSE_CHANGE:   {t:'Invented a change of hands',  ok:false},
+  STOPPAGE_CAUGHT:{t:'Caught a stop',               ok:true},
+  TURNOVER_CAUGHT:{t:'Caught a change of hands',    ok:true},
+  SPELL_HELD:     {t:'Held a long possession',      ok:true}
+};
+const kindName = k => (KIND[k]||{t:k}).t;
+
+/* ------------------------------------------------------------------ loading */
+async function boot(){
+  const idx = await (await fetch('data/index.json',{cache:'no-store'})).json();
+  S.idx = idx; S.cases = idx.cases;
+  try { S.fb = await (await fetch('api/feedback',{cache:'no-store'})).json(); } catch(e){ S.fb = {}; }
+
+  const kinds = [...new Set(S.cases.map(c=>c.kind))].sort((a,b)=>kindName(a)<kindName(b)?-1:1);
+  const matches = [...new Set(S.cases.map(c=>c.match))].sort();
+  kinds.forEach(k=>$('#fKind').add(new Option(kindName(k), k)));
+  matches.forEach(m=>$('#fMatch').add(new Option('match '+m, m)));
+  const have = new Set(S.cases.map(c=>c.case_id));
+  const gone = Object.entries(S.fb).filter(([id,f]) => !have.has(id) &&
+      ((f.comment||'').trim() || f.verdict || f.bookmarked));
+  if(gone.length){
+    const many = gone.length>1, esc = t => { const e=document.createElement('div');
+      e.textContent=t; return e.innerHTML; };
+    $('#gone').style.display='block';
+    $('#gone').innerHTML = '<details><summary><b>&#10004; '+gone.length+' case'+(many?'s':'')+
+      ' you commented on '+(many?'are':'is')+' no longer in the list &mdash; the model now gets '+
+      (many?'them':'it')+' right.</b></summary>' +
+      gone.map(([id,f])=>'<div class="gonerow"><code>'+esc(id)+'</code>'+
+        ((f.comment||'').trim()?'<span>&ldquo;'+esc(f.comment.trim())+'&rdquo;</span>':'')+
+        '</div>').join('') + '</details>';
+  }
+  ['#fBucket','#fKind','#fMatch','#fBall'].forEach(s=>$(s).onchange=renderList);
+  $('#fBook').onchange = renderList;
+  renderList();
+  setupFolds();
+  loadPatterns();
+  loadScore();
+}
+
+function filtered(){
+  const b=$('#fBucket').value, k=$('#fKind').value, m=$('#fMatch').value, bk=$('#fBook').checked;
+  const bl=$('#fBall').value;
+  // 'new' is not an outcome: it is the handful of cases the latest change created, which are
+  // the only ones that can say whether the change was worth making.
+  const okB = c => !b || (b==='new' ? !!c.new_since_fix : c.outcome===b);
+  // Whether the ball was visible decides whether a case can be reviewed at all. ball_seen is the
+  // share of the window where the MODEL could see the ball, so 'in sight' means the reviewer and
+  // the model were looking at the same evidence.
+  const okBall = c => !bl || (c.ball_seen===undefined ? false :
+      bl==='seen' ? !!c.ball_visible :
+      bl==='blind' ? c.ball_seen < 0.5 : (c.ball_seen >= 0.5 && !c.ball_visible));
+  return S.cases.filter(c => okB(c) && okBall(c) && (!k||c.kind===k) && (!m||c.match===m) &&
+    (!bk || (S.fb[c.case_id]||{}).bookmarked));
+}
+
+function renderList(){
+  const rows = filtered();
+  // A case without a replay bundle is still counted, but cannot be opened.
+  const withBundle = rows.filter(c=>c.bundled);
+  const nw = rows.filter(c=>c.new_since_fix).length;
+  $('#count').textContent = withBundle.length+' to watch / '+rows.length+' found'+
+    (nw && $('#fBucket').value!=='new' ? '  ('+nw+' new)' : '');
+  $('#list').innerHTML = withBundle.slice(0,400).map(c=>{
+    const f = S.fb[c.case_id]||{}, ok = c.outcome==='correct';
+    return `<div class="case${S.cur===c.case_id?' on':''}" data-id="${c.case_id}">
+      <div><span class="mark ${ok?'ok':'bad'}">${ok?'&#10004;':'&#10006;'}</span>
+        <span class="k">${kindName(c.kind)}</span>
+        ${c.new_since_fix?'<span class="newtag">NEW</span>':''}
+        ${f.bookmarked?'<span class="star">&#9733;</span>':''}</div>
+      <div class="m">${c.match} &middot; half ${c.period} &middot; ${c.clock} &middot; lasts ${c.duration_s}s${
+        c.ball_seen===undefined?'':' &middot; ball in sight '+Math.round(c.ball_seen*100)+'%'}</div>
+    </div>`;
+  }).join('') || '<div class="case m">Nothing matches these filters.</div>';
+  [...document.querySelectorAll('.case[data-id]')].forEach(el=>
+    el.onclick = ()=>openCase(el.dataset.id));
+}
+
+async function openCase(id){
+  S.cur = id; stop();
+  S.data = await (await fetch('data/cases/'+id+'.json',{cache:'no-store'})).json();
+  const d = S.data;
+  $('#caseTitle').textContent = (d.outcome==='correct'?'✔ ':'✖ ') + kindName(d.kind) +
+    '  ·  ' + d.match + ' half ' + d.period + ' at ' + d.clock;
+  $('#mediaNote').textContent = d.media.note;
+  $('#scrub').max = d.f.length-1;
+  // open on the first frame of the case itself, not the start of the lead-in
+  S.i = Math.max(0, d.in_case.indexOf('1'));
+  $('#scrub').value = S.i;
+  const f = S.fb[id]||{};
+  clearTimeout(typeT);                 // filling the box is not the reviewer typing
+  $('#comment').value = f.comment||'';
+  $('#verdictSel').value = f.verdict||'';
+  $('#proposed').value = f.proposed_label||'';
+  $('#book').classList.toggle('on', !!f.bookmarked);
+  $('#savedMsg').textContent='';
+  renderList(); drawBands(); draw();
+  renderVerdict(); renderSbs(); renderRegression(); renderRestart(); renderMissed();
+  renderGauge(); buildLesson();
+  renderRationale(); renderTiming(); renderBall();
+}
+
+/* ------------------------------------------------------------------ drawing */
+function fit(cv, ratio){
+  const w = Math.max(320, Math.round(cv.clientWidth || cv.width));
+  const h = ratio ? Math.round(w*ratio) : cv.height;
+  if(cv.width!==w || cv.height!==h){ cv.width=w; cv.height=h; }
+}
+
+function pitchBox(cv){
+  // 36px of header above the pitch, so the state chips never sit on top of the players.
+  const pad=18, top=36, w=cv.width-2*pad, h=w*68/105;
+  return {x:pad, y:top+((cv.height-top)-h)/2, w, h};
+}
+function draw(){
+  const cv=$('#stage'); fit(cv, 0.689);
+  const g=cv.getContext('2d'), d=S.data;
+  g.clearRect(0,0,cv.width,cv.height);
+  const b=pitchBox(cv);
+  g.fillStyle='#f4f8fb'; g.fillRect(b.x,b.y,b.w,b.h);
+  g.strokeStyle='#9fb3c8'; g.lineWidth=1.2;
+  g.strokeRect(b.x,b.y,b.w,b.h);
+  g.beginPath(); g.moveTo(b.x+b.w/2,b.y); g.lineTo(b.x+b.w/2,b.y+b.h); g.stroke();
+  g.beginPath(); g.arc(b.x+b.w/2,b.y+b.h/2,b.h*0.137,0,7); g.stroke();
+  [[0,1],[1,-1]].forEach(([side,dir])=>{
+    const pw=b.w*16.5/105, ph=b.h*40.3/68, sw=b.w*5.5/105, sh=b.h*18.3/68;
+    const x0 = side===0 ? b.x : b.x+b.w;
+    g.strokeRect(dir>0?x0:x0-pw, b.y+(b.h-ph)/2, pw, ph);
+    g.strokeRect(dir>0?x0:x0-sw, b.y+(b.h-sh)/2, sw, sh);
+  });
+  if(!d) return;
+  const i=S.i, X=d.x[i], Y=d.y[i];
+  for(let k=0;k<X.length;k++){
+    if(X[k]<0) continue;                       // slot not tracked in this frame
+    const px=b.x+(X[k]/1000)*b.w, py=b.y+(Y[k]/1000)*b.h;
+    g.beginPath(); g.arc(px,py,7,0,7);
+    g.fillStyle = d.is_home[k] ? COL.H : COL.A; g.fill();
+    g.strokeStyle='#fff'; g.lineWidth=1.4; g.stroke();
+  }
+  if(d.bx[i]!==null){
+    const px=b.x+d.bx[i]*b.w, py=b.y+d.by[i]*b.h;
+    const hidden = d.ball_seen_model[i]==='0';
+    g.beginPath(); g.arc(px,py,6,0,7);
+    g.fillStyle='#fff'; g.fill();
+    g.strokeStyle = hidden ? '#d98a14' : '#1b2a4a';
+    g.lineWidth = hidden ? 3 : 2.2; g.stroke();
+    if(hidden){ g.setLineDash([3,3]); g.beginPath(); g.arc(px,py,12,0,7);
+                g.strokeStyle='#d98a14'; g.lineWidth=1.4; g.stroke(); g.setLineDash([]); }
+  }
+  // two chips, in words: what each side says at this instant
+  const inCase = d.in_case[i]==='1';
+  g.textBaseline='middle';
+  const chip=(label,val,x)=>{
+    g.font='bold 13px Calibri';
+    g.fillStyle=COL[val]||'#8795a6'; g.fillRect(x,8,96,20);
+    g.fillStyle='#fff'; g.textAlign='center';
+    g.fillText(val==='D'?'ball dead':(val==='H'?'home':(val==='A'?'away':val)), x+48, 19);
+    g.fillStyle='#5b6878'; g.textAlign='left'; g.font='11px Calibri';
+    g.fillText(label,x+101,19);
+  };
+  chip('really', d.ref[i], b.x);
+  chip('model', d.pred[i], b.x+170);
+  const ok = d.outcome==='correct';
+  if(b.w > 680){
+    g.fillStyle='#5b6878'; g.font='11px Calibri'; g.textAlign='left';
+    g.fillText('t = '+d.t[i].toFixed(2)+' s', b.x+350, 19);
+  }
+  g.fillStyle = inCase ? (ok?'#0e7c66':'#b01b1b') : '#5b6878';
+  g.font='bold 11px Calibri'; g.textAlign='right';
+  g.fillText(inCase ? (ok?'INSIDE THE CASE — THEY AGREE':'INSIDE THE MISTAKE')
+                    : 'before / after', b.x+b.w, 19);
+  g.textAlign='left';
+  renderTable();
+}
+
+function drawBands(){
+  const cv=$('#bands'); fit(cv, 0);
+  const g=cv.getContext('2d'), d=S.data;
+  g.clearRect(0,0,cv.width,cv.height); if(!d) return;
+  const n=d.f.length, w=cv.width/n;
+  const rows=[['what really happened',d.ref,4],['what the model said',d.pred,25]];
+  rows.forEach(([label,seq,y])=>{
+    for(let i=0;i<n;i++){ g.fillStyle=COL[seq[i]]||'#ccc'; g.fillRect(i*w,y,Math.ceil(w),15); }
+    g.fillStyle='#fff'; g.font='bold 10px Calibri'; g.textBaseline='middle';
+    g.fillText(label,5,y+8);
+  });
+  // third strip: could the model see the ball at all? green yes, amber in the file but held
+  // out from the model, grey not tracked by anybody.
+  for(let i=0;i<n;i++){
+    const inFile=d.ball_seen[i]==='1', toModel=d.ball_seen_model[i]==='1';
+    g.fillStyle = toModel ? '#0e7c66' : (inFile ? '#d98a14' : '#c8d2dd');
+    g.fillRect(i*w,46,Math.ceil(w),15);
+  }
+  g.fillStyle='#fff'; g.font='bold 10px Calibri'; g.textBaseline='middle';
+  g.fillText('could the model see the ball',5,54);
+  const shade = d.outcome==='correct' ? 'rgba(14,124,102,.26)' : 'rgba(176,27,27,.28)';
+  for(let i=0;i<n;i++) if(d.in_case[i]==='1'){
+    g.fillStyle=shade; g.fillRect(i*w,0,Math.ceil(w),cv.height);
+  }
+  g.strokeStyle='#11161f'; g.lineWidth=1.6;
+  g.beginPath(); g.moveTo(S.i*w+w/2,0); g.lineTo(S.i*w+w/2,cv.height); g.stroke();
+}
+$('#bands').onclick = e => {
+  if(!S.data) return;
+  const r=e.target.getBoundingClientRect();
+  S.i = Math.max(0, Math.min(S.data.f.length-1,
+        Math.round((e.clientX-r.left)/r.width*(S.data.f.length-1))));
+  $('#scrub').value=S.i; draw(); drawBands();
+};
+
+/* ======================================================= the plain read-out
+
+   Four blocks, in the order a person actually asks the questions:
+     1. what went wrong, in one sentence;
+     2. a picture of the two answers side by side;
+     3. the handful of things that were visible at the time, and whether the model used them;
+     4. how sure the model was, against how sure it needed to be.
+   Everything here is computed from the same bundle the detail view uses -- the simple view is a
+   translation of those numbers, never a different set of them. */
+
+function caseIdx(d){ const o=[]; for(let i=0;i<d.in_case.length;i++) if(d.in_case[i]==='1') o.push(i);
+                     return o; }
+function beforeIdx(d, k=25){
+  const s=d.in_case.indexOf('1'), a=Math.max(0,s-k), o=[];
+  for(let i=a;i<s;i++) o.push(i); return o;
+}
+const pick = (arr,ix) => ix.map(i=>arr[i]).filter(v=>v!==null&&v!==undefined);
+const secs = (d,steps) => (steps*d.stride/d.fps);
+
+function runsOfSeq(seq){
+  const out=[]; let i=0;
+  while(i<seq.length){ let j=i; while(j<seq.length&&seq[j]===seq[i]) j++; out.push([i,j,seq[i]]); i=j; }
+  return out;
+}
+
+/* ---------------------------------------------------------- 1. the verdict */
+function teamChanges(seq){
+  const o=[]; for(let i=1;i<seq.length;i++)
+    if(seq[i]!==seq[i-1] && seq[i]!=='D' && seq[i-1]!=='D') o.push(i);
+  return o;
+}
+function nearestTo(list, i){
+  let best=null, bd=Infinity;
+  for(const j of list) if(Math.abs(j-i)<bd){ bd=Math.abs(j-i); best=j; }
+  return best;
+}
+
+function renderVerdict(){
+  const d=S.data, ix=caseIdx(d), ok=d.outcome==='correct', el=$('#verdict');
+  const step=d.stride/d.fps, n=d.f.length;
+  const dis = ix.filter(i=>d.pred[i]!==d.ref[i]).length*step;
+  // an instant case (a change of hands) is one frame long, so the honest measure is the clip
+  let disWin=0; for(let i=0;i<n;i++) if(d.pred[i]!==d.ref[i]) disWin++;
+  disWin *= step;
+  const teamAt = (seq,from,dir)=>{ for(let i=from;i>=0&&i<n;i+=dir) if(seq[i]!=='D') return seq[i];
+                                   return null; };
+  const len = ix.length*step;
+  const refDead = ix.filter(i=>d.ref[i]==='D').length*step;
+  const modDead = ix.filter(i=>d.pred[i]==='D').length*step;
+  const refTeams = [...new Set(ix.map(i=>d.ref[i]))].filter(c=>c!=='D');
+  const modTeams = [...new Set(ix.map(i=>d.pred[i]))].filter(c=>c!=='D');
+  const x = d.extra||{};
+  let head='', body='';
+
+  switch(d.kind){
+    case 'MISSED_STOP': case 'SPELL_MERGE':
+      head = 'The model never noticed the stop.';
+      body = `The ball was dead for <b>${refDead.toFixed(1)} s</b>. The model played straight
+              through it and kept the ball with <b>${TEAM[d.pred[ix[0]]]||'one team'}</b> the
+              whole time.`;
+      break;
+    case 'INVENTED_STOP':
+      head = 'It called a stop that never happened.';
+      body = `Play was live for all <b>${len.toFixed(1)} s</b> here. The model called the ball
+              dead for <b>${modDead.toFixed(1)} s</b> of it.`;
+      break;
+    case 'BOUNDARY':
+      head = 'Right stop, wrong moment.';
+      body = `It did find this stop, but started it
+              <b>${Math.abs(x.start_err_s||0).toFixed(2)} s ${(x.start_err_s||0)>0?'late':'early'}</b>
+              and ended it
+              <b>${Math.abs(x.end_err_s||0).toFixed(2)} s ${(x.end_err_s||0)>0?'late':'early'}</b>.`;
+      break;
+    case 'WRONG_TEAM':
+      head = 'It gave the ball to the wrong team.';
+      body = `For <b>${dis.toFixed(1)} s</b> the ball was <b>${TEAM[x.truth_team]||'the other team'}&rsquo;s</b>,
+              and the model said <b>${TEAM[x.said]||'the other'}</b> &mdash; averaging
+              <b>${pc(x.mean_p_home)}</b> sure it was home.`;
+      break;
+    case 'MISSED_CHANGE': {
+      const c0=ix[0], from=teamAt(d.ref,c0,-1), to=teamAt(d.ref,c0,+1);
+      const j=nearestTo(teamChanges(d.pred), c0);
+      head = 'It missed the ball changing hands.';
+      // where a stoppage sits across the moment, the per-frame field reads the same on both
+      // sides of it -- so say only what is actually visible here.
+      body = (from && to && from!==to
+        ? `The ball goes from <b>${TEAM[from]}</b> to <b>${TEAM[to]}</b> right here. `
+        : `The reference marks a change of hands right here. `) + (j===null
+        ? `In the whole <b>${(n*step).toFixed(0)} s</b> shown the model never switches &mdash; it
+           keeps the ball with <b>${TEAM[teamAt(d.pred,c0,+1)]||'the same team'}</b>, and is wrong
+           for <b>${disWin.toFixed(1)} s</b> of the clip.`
+        : `The model only switches <b>${Math.abs((j-c0)*step).toFixed(1)} s
+           ${(j-c0)>0?'later':'earlier'}</b>, so it is wrong for <b>${disWin.toFixed(1)} s</b> of
+           the clip.`);
+      break;
+    }
+    case 'FALSE_CHANGE': {
+      const c0=ix[0], held=teamAt(d.ref,c0,-1)||refTeams[0];
+      const j=nearestTo(teamChanges(d.pred), c0);
+      head = 'It invented a change of hands.';
+      body = `The reference keeps the ball with <b>${TEAM[held]||'one team'}</b> right through
+              here. The model switches anyway${j===null?'':' at '+((j-ix[0])*step).toFixed(1)+' s'},
+              and is wrong for <b>${disWin.toFixed(1)} s</b> of the clip.`;
+      break;
+    }
+    case 'STOPPAGE_CAUGHT':
+      head = 'It caught the stop, almost to the frame.';
+      body = `A <b>${refDead.toFixed(1)} s</b> stop. The model blew the whistle
+              <b>${Math.abs(x.start_err_s||0).toFixed(2)} s ${(x.start_err_s||0)>0?'late':'early'}</b>
+              and restarted
+              <b>${Math.abs(x.end_err_s||0).toFixed(2)} s ${(x.end_err_s||0)>0?'late':'early'}</b>.
+              This is what a clean read looks like.`;
+      break;
+    case 'TURNOVER_CAUGHT':
+      head = 'It caught the ball changing hands on time.';
+      body = `Within half a second, and it had the right team for a full second either side.
+              Only four cases in five matches are this clean.`;
+      break;
+    case 'SPELL_HELD':
+      head = 'It held a long possession without wobbling.';
+      body = `<b>${Number(x.length_s||len).toFixed(1)} s</b> with
+              <b>${TEAM[x.team]||'one team'}</b>, agreeing on <b>${pc(x.agreement)}</b>
+              of the frames.`;
+      break;
+    default:
+      head = kindName(d.kind);
+      body = `The two answers differ for <b>${dis.toFixed(1)} s</b> of this
+              <b>${len.toFixed(1)} s</b> window.`;
+  }
+  el.className = 'vcard'+(ok?' ok':'');
+  // The exporter's read-out of this case, in four parts and the same four for every kind of
+  // mistake: the two answers over the same frames, the evidence those frames carried, the
+  // numbers the prose is drawn from, and the cricket equivalent. It sits above everything else
+  // because it is the only part most readings need. Older bundles carry a plain string instead,
+  // and still render.
+  const plain = (!ok && d.plain) ? `<div class="plain"><b>In plain words</b>${
+    typeof d.plain === 'string' ? d.plain : `
+      <p>${d.plain.what||''}</p>
+      <p>${d.plain.why||''}</p>
+      ${(d.plain.reads||[]).length ? `<div class="reads">${d.plain.reads.map(r =>
+        `<span><i>${r.k}</i>${r.v}</span>`).join('')}</div>` : ''}
+      ${d.plain.cricket ? `<div class="cric"><b>In cricket</b>${d.plain.cricket}</div>` : ''}`
+  }</div>` : '';
+  el.innerHTML = `<div class="tagline">${ok?'the model got this right':'the model got this wrong'}</div>
+    <h3>${head}</h3><p>${body}</p>
+    ${plain}
+    <div class="where">${d.match} &middot; half ${d.period} &middot; clock ${d.clock} &middot;
+      ${len<0.4 ? 'one moment' : len.toFixed(1)+' s long'}${
+      modTeams.length>1?' &middot; the model changed its mind here':''}</div>`;
+}
+
+/* ------------------------------------------------ 2. the two answers, drawn */
+function renderSbs(){
+  const d=S.data, n=d.f.length, step=d.stride/d.fps;
+  const label = ch => ch==='D' ? 'ball dead' : (ch==='H'?'home':(ch==='A'?'away':ch));
+  const strip = seq => runsOfSeq(seq).map(([a,b,ch])=>{
+    const w = (b-a)/n*100;
+    return `<i style="left:${a/n*100}%;width:${w}%;background:${COL[ch]||'#ccc'}">${
+      w>13 ? label(ch) : ''}</i>`;
+  }).join('');
+  const ix = caseIdx(d);
+  const dis = ix.filter(i=>d.pred[i]!==d.ref[i]).length*step;
+  let disWin=0; for(let i=0;i<n;i++) if(d.pred[i]!==d.ref[i]) disWin++;
+  disWin *= step;
+  const ok = d.outcome==='correct';
+  // the pre-hardening answer, shown only where the hardening actually changed something
+  const before = d.pred_before && d.pred_before !== d.pred
+    ? `<div class="srow"><span class="lab">before the<br>restart fix</span>
+         <div class="track">${strip(d.pred_before)}</div></div>` : '';
+  $('#sbs').innerHTML = `<h4>The two answers, side by side</h4>
+    <div class="srow"><span class="lab">really<br>happened</span>
+      <div class="track">${strip(d.ref)}</div></div>
+    ${before}
+    <div class="srow"><span class="lab">the model<br>said</span>
+      <div class="track">${strip(d.pred)}</div></div>
+    <div class="gap ${ok&&dis<=0.5?'ok':''}">${dis<0.01
+      ? 'Inside the case they never disagree.'
+      : 'Inside the case they disagree for '+dis.toFixed(1)+' s.'}</div>
+    <div class="note">Across the whole ${(n*step).toFixed(0)} s clip shown:
+      <b>${disWin.toFixed(1)} s</b> of disagreement.</div>
+    <div class="keys"><span><i style="background:#004d98"></i>home</span>
+      <span><i style="background:#ee2523"></i>away</span>
+      <span><i style="background:#8795a6"></i>ball dead</span>
+      <span>the shaded part of the strips above is this case</span></div>`;
+}
+
+/* ------------------------------------- the cases the last change created
+
+   A change is judged by what it breaks as well as by what it fixes, and a net count hides the
+   trade. These are the individual cases that did not exist before the restart hardening, each
+   with the measured difference that produced it: what the old answer was, what the new one is,
+   and which half of the change touched this window. */
+function renderRegression(){
+  const d=S.data, r=d.regression, el=$('#regblk');
+  if(!r){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  // One label per part of the change, joined, so any combination of them reads as English.
+  const PART={whistle:'the whistle moved onto the players slowing down',
+              edge:'the restart edge moved onto the ball',
+              override:'a hard rule overrode the model',
+              touch:'the ball was read as being touched here',
+              merged:'the possession was too short to keep',
+              redecided:'the possession either side was re-decided',
+              timing:'the same switch, a little further out',
+              unknown:'the window around it changed'};
+  const causeLabel = c => {
+    const p = String(c||'').split('+').map(x=>PART[x]).filter(Boolean);
+    if(!p.length) return String(c||'');
+    return p.length<2 ? p[0] : p.slice(0,-1).join(', ')+' and '+p[p.length-1];
+  };
+  let ba='';
+  if(r.edge){
+    const f=v=>(v>0?'+':'')+v.toFixed(2)+' s';
+    ba = `<div class="ba">
+      <div><div class="h">restart edge, before</div><b>${f(r.edge.end_err_before_s)}</b>
+        <div class="note">against the reference</div></div>
+      <div><div class="h">restart edge, now</div><b>${f(r.edge.end_err_after_s)}</b>
+        <div class="note">moved ${Math.abs(r.edge.moved_s).toFixed(2)} s
+          ${r.edge.moved_s>0?'later':'earlier'}</div></div></div>`;
+  }
+  el.innerHTML = `<div class="tagline">&#9888; this case is new since the latest change</div>
+    <h5>${causeLabel(r.cause)}</h5>
+    <p>${r.why}</p>${ba}
+    <div class="fix"><b>What it says about the change:</b> ${r.lesson}</div>`;
+}
+
+/* ------------------------------------------- what put the ball back in play
+
+   The hardening layer (stage3/restart_logic.py) reads the restart off the coordinates: where the
+   ball is resting says which Law applies, and for a corner the players say it too -- a taker on
+   the flag and a loaded box. These are the fields it decided on, shown as it decided them, so a
+   reviewer can see the reasoning rather than only its result. */
+function renderRestart(){
+  const d=S.data, r=d.restart, el=$('#restartblk');
+  const sw=(d.switches||[]);
+  if(!r && !sw.length){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='block';
+  const NICE={corner:'a corner', throw_in:'a throw-in', goal_kick:'a goal kick',
+              free_kick:'a free kick', kick_off:'a kick-off', unknown:'something it could not name'};
+  let h = '<h4>How play restarted, and who the model gave it to</h4>';
+  if(r){
+    h += `<div style="margin-bottom:6px"><span class="rk">${(r.kind||'').replace('_',' ')}</span>
+      <span class="note" style="margin-left:6px">read off the resting ball and the players
+      around it${r.seconds_before_case>0.05?' &mdash; '+r.seconds_before_case.toFixed(1)+' s before this case':''}</span></div>
+      <div class="rrow"><span>last team in control, before the whistle</span>
+        <b>${r.last_control||'&mdash;'}</b></div>
+      <div class="rrow"><span>likely restart team &mdash; who takes ${NICE[r.kind]||'it'}</span>
+        <b>${r.restart_team||'&mdash; (geometry did not settle it)'}</b></div>
+      <div class="rrow"><span>first frame the ball was visible again</span>
+        <b>${r.first_ball_frame>0?r.first_ball_frame:'never, in this window'}</b></div>
+      <div class="rrow"><span>frame play was judged to resume</span>
+        <b>${r.resume_frame>0?r.resume_frame:'&mdash;'}</b></div>`;
+  }
+  if(sw.length){
+    h += '<div class="sw"><div class="tlab">why the answer changed, and when</div>' +
+      sw.map(x=>`<div class="swi"><span class="tm">${x.t.toFixed(1)}s</span>
+        <span>${x.why}</span></div>`).join('') + '</div>';
+  } else if(r){
+    h += '<div class="note" style="margin-top:5px">The team never changed inside this window.</div>';
+  }
+  el.innerHTML = h;
+}
+
+/* ------------------------------- 3. what was visible, and did the model use it
+
+   For a live-or-dead case these are the plain signs of a stop, each measured during the case and
+   in the 3 s before it. For a which-team case they are the cues the model was actually handed,
+   taken from its own rationale. Either way a cue is marked "the model did not act on this" only
+   when it points the reference's way and the model went the other way. */
+function meterRow(label, val, hi, txt){
+  const w = hi>0 ? Math.max(2, Math.min(100, val/hi*100)) : 2;
+  return `<div class="meter"><span>${label}</span><div class="mb">
+    <i style="width:${w}%;background:${label==='during'?'#1b2a4a':'#b9c6d4'}"></i></div>
+    <b>${txt}</b></div>`;
+}
+
+function stopSignals(d){
+  // Each sign is read as pointing one of three ways: a stop, live play, or nothing either way.
+  // "Nothing" matters: the absence of a sign is not evidence, and must not be reported as one.
+  const ix=caseIdx(d), bx=beforeIdx(d), F=d.feat, out=[];
+  const refSays = ix.filter(i=>d.ref[i]==='D').length > ix.length/2 ? 'dead' : 'live';
+  const modSays = ix.filter(i=>d.pred[i]==='D').length > ix.length/2 ? 'dead' : 'live';
+
+  const spdIn=mean(pick(F.spd_mean,ix)), spdBe=mean(pick(F.spd_mean,bx));
+  if(spdIn!==null){
+    const says = spdIn<1.6 ? 'dead' : (spdIn>2.2 ? 'live' : 'nothing');
+    out.push({chip:'SPEED', says, strength: Math.abs(spdIn-1.9),
+      head: says==='dead' ? 'Everyone slowed to a walk'
+          : says==='live' ? 'Players were still running hard'
+          : 'Players at a middling pace',
+      p: `All 22 players average <b>${spdIn.toFixed(2)} m/s</b> through this window, against
+          <b>${spdBe===null?'—':spdBe.toFixed(2)+' m/s'}</b> in the seconds before. A walk is
+          about 1.4 m/s; open play is usually over 2.2.`,
+      meters: meterRow('before', spdBe||0, 6, (spdBe||0).toFixed(2)+' m/s') +
+              meterRow('during', spdIn, 6, spdIn.toFixed(2)+' m/s'),
+      teach: says==='dead' ? 'that everyone had dropped to walking pace and stayed there'
+           : says==='live' ? 'that players were still running at full speed' : ''});
+  }
+
+  const stIn=mean(pick(F.frac_still,ix)), stBe=mean(pick(F.frac_still,bx));
+  if(stIn!==null){
+    const says = stIn>0.15 ? 'dead' : (stIn<0.06 ? 'live' : 'nothing');
+    out.push({chip:'STANDING', says, strength: Math.abs(stIn-0.1)*6,
+      head: says==='dead' ? Math.round(stIn*22)+' players simply standing'
+          : says==='live' ? 'Nobody is standing still'
+          : 'A few players standing',
+      p: `<b>${pc(stIn)}</b> of the players are standing still here, against <b>${pc(stBe)}</b>
+          just before. When play stops, people stop.`,
+      meters: meterRow('before', stBe||0, 1, pc(stBe)) + meterRow('during', stIn, 1, pc(stIn)),
+      teach: says==='dead' ? 'that a fifth of the pitch was standing still at once'
+           : says==='live' ? 'that nobody was standing still anywhere' : ''});
+  }
+
+  const offIn = Math.max(0, ...pick(F.n_outside_pitch,ix).map(Number));
+  if(F.n_outside_pitch) out.push({
+    chip:'OFF PITCH', says: offIn>0 ? 'dead' : 'nothing', strength: Math.min(3,offIn),
+    head: offIn>0 ? offIn+' player(s) off the field' : 'Everyone inside the lines',
+    p: offIn>0 ? `Players tracked past the touchline usually means a throw-in, a substitution or a
+        break &mdash; the ball is not in play.`
+      : 'Nobody steps off the pitch here. That neither shows a stop nor rules one out.',
+    meters:'', teach: offIn>0 ? 'that players were standing off the pitch' : ''});
+
+  // the stored ball position is a fraction of the pitch, so anything outside 0..1 is off the field
+  const ballOut = mean(ix.map(i => d.bx[i]===null ? null
+    : ((d.bx[i]<0 || d.bx[i]>1 || d.by[i]<0 || d.by[i]>1) ? 1 : 0)).filter(v=>v!==null));
+  if(ballOut!==null) out.push({
+    chip:'BALL OUT', says: ballOut>0 ? 'dead' : 'nothing', strength: 2+ballOut,
+    head: ballOut>0 ? 'The ball itself is off the field' : 'The ball stays inside the lines',
+    p: ballOut>0
+      ? `The tracked ball sits outside the touchline for <b>${pc(ballOut)}</b> of this window.
+         That is about as plain a sign of a stop as this data has.`
+      : `The ball never leaves the field here &mdash; which does not rule out a foul, a card or an
+         injury stop.`,
+    meters:'', teach: ballOut>0 ? 'that the ball was sitting outside the lines' : ''});
+
+  const trIn=mean(pick(F.n_tracked,ix));
+  if(trIn!==null && trIn<22) out.push({
+    chip:'TRACKING', says:'nothing', strength:0.1,
+    head: 'Not all 22 players are tracked',
+    p: `Only <b>${trIn.toFixed(1)}</b> of 22 on average. Worth knowing, but no sign of a stop
+        either way.`,
+    meters:'', teach:''});
+
+  return out.map(x=>Object.assign(x, {
+    present: x.says!=='nothing',
+    matters: x.says===refSays,
+    aligned: x.says===modSays
+  }));
+}
+
+function teamSignals(d){
+  const r=d.rationale;
+  if(!r || r.stage!==3 || !r.cues) return [];
+  const chipOf = c => c.cue.indexOf('nearest')===0 ? 'WHO IS<br>NEAREST'
+    : (c.cue.indexOf('pitch control where')===0 ? 'SPACE AT<br>THE BALL'
+    : (c.cue.indexOf('pitch control over')===0 ? 'SPACE ON<br>THE PITCH' : 'SECOND<br>SOURCE'));
+  const WEIGHT = {'clear':3, 'independent':2.5, 'slim':1, 'a coin toss':0.2};
+  return r.cues.map(c=>({
+    chip: chipOf(c),
+    head: c.reading + ' → points to ' + (c.points_to==='H'?'home':'away'),
+    p: `${c.cue} &mdash; as evidence this is <b>${c.strength}</b>.`,
+    meters: '',
+    present: true,
+    strength: WEIGHT[c.strength] || 1,
+    aligned: !!c.with_model,
+    matters: !!c.with_reference,
+    teach: c.cue
+  }));
+}
+
+const TEAM_KINDS = new Set(['WRONG_TEAM','MISSED_CHANGE','FALSE_CHANGE','TURNOVER_CAUGHT',
+                            'SPELL_HELD']);
+const isStopCase = d => !TEAM_KINDS.has(d.kind);
+const signalsFor = d => isStopCase(d) ? stopSignals(d) : teamSignals(d);
+
+function renderMissed(){
+  const d=S.data, el=$('#missed');
+  const stage2 = isStopCase(d);
+  let sig = signalsFor(d);
+  // the signs that pointed at the right answer and were not followed come first; signs that
+  // point nowhere come last, because an absent sign is not something the model ignored
+  const rank = x => (x.matters&&!x.aligned ? 300 : 0) + (x.matters ? 200 : 0) +
+                    (x.present ? 100 : 0) + Math.min(90,(x.strength||0)*10);
+  sig.sort((a,b)=>rank(b)-rank(a));
+  let quiet = 0;
+  const top = sig.filter(x => x.present || ++quiet<=1).slice(0,3);
+  const missed = sig.filter(s=>s.matters&&!s.aligned).length;
+  const title = d.outcome==='correct'
+    ? 'What the model had to go on &mdash; and it used'
+    : (missed ? 'What was visible &mdash; and what the model did not use'
+              : 'What was visible at the time');
+  el.innerHTML = `<h4>${title}</h4>` + (top.length ? top.map(s=>`
+    <div class="mc"><div class="chip${s.matters?'':' grey'}">${s.chip}</div>
+      <div><h5>${s.head}</h5><p>${s.p}</p>${s.meters}
+        <span class="flag ${!s.present ? 'na' : (s.matters ? (s.aligned?'used':'miss') : 'other')}">${
+          !s.present ? 'no help either way'
+            : (s.matters ? (s.aligned ? 'the model went with this'
+                                      : 'the model did not act on this')
+                         : 'this one pointed the model&rsquo;s way')}</span></div></div>`).join('')
+    : (stage2 ? '<div class="note">Nothing in the recorded features separates the two answers here.</div>'
+              : '<div class="note">The cues for this moment were not exported. The frame table '
+              + 'below still has every number the model saw.</div>'))
+    + (!top.length ? '' : stage2 ? `<div class="note" style="margin-top:7px">Measured over the case window and the
+        ${(beforeIdx(d).length*d.stride/d.fps).toFixed(1)} s before it, from the same numbers the
+        model saw.</div>`
+      : `<div class="note" style="margin-top:7px">These are the only clues the model gets for
+        &ldquo;which team&rdquo;. If they all point its way, these inputs do not explain the
+        mistake.</div>`);
+}
+
+/* ------------------------------------------ 4. how sure, against how sure it needed to be */
+function renderGauge(){
+  const d=S.data, r=d.rationale, el=$('#gauge'), ix=caseIdx(d);
+  if(!r){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='block';
+  let q, val, need, say;
+
+  if(r.stage===2){
+    val = mean(pick(d.p_dead,ix));
+    // What the model needed on average: the duration prior charges a fixed amount to open a
+    // stoppage, spread over the steps it would cover. Same arithmetic as the decoder, read as a
+    // probability instead of in nats.
+    const lp = Math.log(r.prior_dead/(1-r.prior_dead)) + r.duration_cost_nats/Math.max(1,r.steps);
+    need = 1/(1+Math.exp(-lp));
+    q = 'How sure was the model that the ball had stopped?';
+    const enough = val>=need;
+    say = `It averaged <b>${pc(val)}</b> across this window. To be worth calling a stop this long,
+           it needed about <b>${pc(need)}</b>. ` + (enough
+      ? 'It had enough, which is why it called one.'
+      : 'It never got there, so it played on. By its own rules it did nothing wrong, which means '
+        + 'the <b>signal</b> is what has to improve, not the cut-off.');
+  } else {
+    val = mean(pick(d.p_home,ix)); need = 0.5;
+    const refHome = (r.reference||'A')==='H';
+    const modelHome = val>=0.5;
+    q = 'How sure was the model that <b>home</b> had the ball?';
+    say = `It averaged <b>${pc(val)}</b> for home, so it said
+           <b>${modelHome?'home':'away'}</b>. The right answer is <b>${refHome?'home':'away'}</b>.
+           ` + (modelHome===refHome
+      ? 'Same side of the line &mdash; and the further from 50%, the more settled the call.'
+      : (Math.abs(val-0.5)<0.15
+         ? 'It is on the wrong side of the line, but only just: this was close to a coin toss.'
+         : 'It is on the wrong side of the line, and confidently so &mdash; which is the worse '
+           + 'kind of mistake.'));
+  }
+  const v = Math.max(0,Math.min(1,val||0));
+  el.innerHTML = `<h4>How sure was it?</h4>
+    <div class="gsay" style="margin:0 0 6px">${q}</div>
+    <div class="gwrap"><div class="gbar">
+      <i style="width:${v*100}%;background:${v>=need?'#0e7c66':'#b01b1b'}"></i>
+      <u style="left:${need*100}%"></u></div>
+      <div class="glab"><span>0%</span>
+        <span style="color:#8a5a00">&#9650; it needed about ${pc(need)}</span><span>100%</span></div>
+    </div>
+    <div class="gsay">${say}</div>`;
+}
+
+/* ------------------------------------------- the one-line lesson for the model */
+function buildLesson(){
+  const d=S.data, el=$('#lesson'), x=d.extra||{};
+  const all = signalsFor(d);
+  const sig = all.filter(s=>s.matters && !s.aligned && s.teach);
+  if(d.kind==='BOUNDARY'){
+    el.innerHTML = `<div class="tagline">what to teach it</div>
+      <p>Nothing here is about <i>whether</i> there was a stop &mdash; the model got that right.
+         It is about <b>where the stop begins and ends</b>: it opened this one
+         <b>${Math.abs(x.start_err_s||0).toFixed(2)} s ${(x.start_err_s||0)>0?'late':'early'}</b>
+         and closed it
+         <b>${Math.abs(x.end_err_s||0).toFixed(2)} s ${(x.end_err_s||0)>0?'late':'early'}</b>.
+         Step through the edges above and look at what changes on the pitch exactly there.</p>`;
+    return;
+  }
+  if(d.outcome==='correct'){
+    el.innerHTML = `<div class="tagline">what to keep</div><p>This is the pattern worth comparing
+      the failures against: the signs all pointed one way and the model committed. Open a wrong
+      case next and look for which of these signs was missing.</p>`;
+    return;
+  }
+  if(!sig.length){
+    const pointedWrong = all.filter(s=>s.present && !s.matters).length;
+    el.innerHTML = `<div class="tagline">what to teach it</div><p>${pointedWrong ?
+      'Every clue the model had here pointed its own way &mdash; and it was still wrong. So this '
+      + 'is a <b>missing input</b> case, not a judgement case: the model cannot see whatever '
+      + 'settles it. Star it so these can be grouped and counted.'
+      : 'Nothing the model was given separates the two answers here. That makes this a '
+      + '<b>missing input</b> case, not a judgement case &mdash; worth starring so it can be '
+      + 'grouped with others like it.'}</p>`;
+    return;
+  }
+  const what = sig.slice(0,2).map(s=>s.teach).join(', and ');
+  el.innerHTML = `<div class="tagline">what to teach it</div>
+    <p>It should have weighed <b>${what}</b>. That was on the pitch at the time and the model
+       went the other way.</p>`;
+}
+
+/* ------------------------------- the detail, folded away behind the summary -- */
+function renderTable(){
+  const d=S.data, i=S.i;
+  const agree = d.pred[i]===d.ref[i];
+  const holder = {H:'home',A:'away','-':'no synced event'}[d.holder[i]];
+  const rows = [
+    ['frame / time', d.f[i]+'  /  '+d.t[i].toFixed(2)+' s'],
+    ['model says', d.pred[i]+(agree?'':'   ← differs')],
+    ['reference', d.ref[i]],
+    ['reference source', d.ref_src],
+    ['second opinion (event feed)', holder],
+    ['P(dead)', fmt(d.p_dead[i])],
+    ['P(home | live)', fmt(d.p_home[i])],
+    ['ball in the file', d.ball_seen[i]==='1' ? 'visible' : 'not tracked'],
+    ['ball as the model saw it', d.ball_seen_model[i]==='1' ? 'visible' : 'hidden (masked)'],
+  ];
+  // the restart layer's own working, frame by frame
+  const at = (arr, nd, unit) => (arr && arr[i]!==null && arr[i]!==undefined)
+    ? arr[i].toFixed(nd)+(unit||'') : '—';
+  rows.push(['nearest home player to the ball', at(d.knn_home_m,1,' m')]);
+  rows.push(['nearest away player to the ball', at(d.knn_away_m,1,' m')]);
+  rows.push(['k-NN margin (+ home, − away)', at(d.knn_margin,2)]);
+  rows.push(['ball travelled, next 0.4 s', at(d.ball_move_m,1,' m')]);
+  if(d.overridden) rows.push(['restart logic driving this frame',
+    d.overridden[i]==='1' ? 'yes' : 'no — the model has it']);
+  if(d.unsure) rows.push(['flagged uncertain', d.unsure[i]==='1' ? 'yes' : 'no']);
+  if(d.pred_before) rows.push(['before the restart fix', d.pred_before[i]]);
+  let html = rows.map(([k,v])=>`<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`).join('');
+  html += '<tr><td class="k" colspan="2" style="padding-top:8px;font-weight:700">features</td></tr>';
+  for(const [k,arr] of Object.entries(d.feat)){
+    html += `<tr><td class="k">${k}</td><td class="v">${fmt(arr[i])}</td></tr>`;
+  }
+  $('#data').innerHTML = html;
+  $('#why').innerHTML = explain(d,i);
+}
+
+/* A plain reading of what the two decisions rest on at this frame. Descriptive only: it reports
+   the numbers the model acted on, and does not assert why it was wrong. */
+function explain(d,i){
+  const bits=[];
+  const pd=d.p_dead[i], ph=d.p_home[i];
+  if(pd!==null) bits.push(`Live/dead: P(dead) = <b>${pd.toFixed(3)}</b>, so the per-frame view
+    leans <b>${pd>=0.5?'dead':'live'}</b>; the duration model output <b>${d.pred[i]==='D'?'D':'live'}</b>.`);
+  if(ph!==null && d.pred[i]!=='D') bits.push(`Team: P(home) = <b>${ph.toFixed(3)}</b> →
+    <b>${ph>=0.5?'H':'A'}</b>${Math.abs(ph-0.5)<0.1?' — within 0.1 of the coin-toss line':''}.`);
+  if(d.ball_seen_model[i]==='0') bits.push('The ball was <b>hidden from the model</b> here.');
+  const f=d.feat;
+  if(f.ball_margin && f.ball_margin[i]!==null && Math.abs(f.ball_margin[i])<=1)
+    bits.push(`Nearest home and away players are within <b>${Math.abs(f.ball_margin[i]).toFixed(2)} m</b>
+      of each other relative to the ball.`);
+  if(f.n_outside_pitch && f.n_outside_pitch[i]>0)
+    bits.push(`<b>${f.n_outside_pitch[i]}</b> player(s) tracked beyond the pitch line.`);
+  if(f.n_tracked && f.n_tracked[i]!==null && f.n_tracked[i]<22)
+    bits.push(`Only <b>${f.n_tracked[i]}</b> of 22 players tracked.`);
+  if(d.holder[i]!=='-' ){
+    const ev = d.holder[i]==='H'?'H':'A';
+    if(d.ref[i]!=='D' && ev!==d.ref[i])
+      bits.push(`<b>The two reference products disagree here</b> — the event feed says
+        ${ev==='H'?'home':'away'}, the per-frame field says ${d.ref[i]==='H'?'home':'away'}.`);
+  }
+  return bits.join(' ') || 'No distinguishing signal recorded at this frame.';
+}
+
+/* The model's own arithmetic, unchanged: stage 2 is a Viterbi decode, so its decision IS a sum
+   of evidence in nats against what the duration prior charges. Stage 3 has no closed form, so the
+   cues are listed with which side each supports. */
+function renderRationale(){
+  const d=S.data, r=d.rationale, el=$('#rationale');
+  if(!r){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='block';
+  let h = `<h4>The model&rsquo;s own arithmetic</h4>`;
+
+  if(r.stage===2){
+    const ev=r.emission_nats, cost=r.duration_cost_nats, best=r.best_window_nats;
+    const scale = Math.max(Math.abs(ev), cost, best, 1);
+    const seg = (v,c) => `<div class="seg" style="width:${Math.max(3,Math.abs(v)/scale*210)}px;
+      background:${c}"></div><span style="font-family:Consolas,monospace">${v>0?'+':''}${v.toFixed(0)} nats</span>`;
+    h += `<div class="ln"><span>the model ${r.decision}</span>
+            <b>P(dead) prior ${r.prior_dead}</b></div>
+          <div class="tlab">evidence for a stoppage, summed over the span (${r.steps} decode steps)</div>
+          <div class="bal">${seg(ev, ev>0?'#0e7c66':'#b01b1b')}</div>
+          <div class="tlab">best sub-window inside it (${r.best_window_s} s)</div>
+          <div class="bal">${seg(best,'#1b2a4a')}</div>
+          <div class="tlab">what the duration prior charges to insert a stoppage</div>
+          <div class="bal">${seg(-cost,'#8795a6')}</div>
+          <div class="ln" style="margin-top:4px"><span>net</span>
+            <b class="${r.margin_nats>0?'good':'bad'}">${r.margin_nats>0?'+':''}${r.margin_nats} nats</b></div>`;
+  } else {
+    h += `<div class="ln"><span>the model ${r.decision}</span>
+            <b>P(home) ${r.p_home===null?'—':r.p_home}</b></div>
+          <table class="cue"><tr><th style="text-align:left">cue the model is given</th>
+            <th>reading</th><th>says</th><th>model</th><th>ref</th></tr>` +
+      r.cues.map(c=>`<tr><td>${c.cue}<div class="note">${c.strength}</div></td>
+        <td style="font-family:Consolas,monospace;font-size:11.5px">${c.reading}</td>
+        <td class="pt" style="color:${c.points_to==='H'?'#004d98':'#ee2523'}">${c.points_to}</td>
+        <td class="${c.with_model?'yes':'no'}">${c.with_model?'✔':'·'}</td>
+        <td class="${c.with_reference?'yes':'no'}">${c.with_reference?'✔':'·'}</td></tr>`).join('') +
+      `</table>`;
+  }
+  h += `<div class="why2" style="margin:7px -10px -8px">${r.why}</div>`;
+  el.innerHTML = h;
+}
+
+function runsOf(seq, ch){
+  const out=[]; let i=0;
+  while(i<seq.length){
+    if(seq[i]===ch){ let j=i; while(j<seq.length&&seq[j]===ch) j++; out.push([i,j]); i=j; }
+    else i++;
+  }
+  return out;
+}
+const longest = rs => rs.reduce((a,b)=>(!a||(b[1]-b[0])>(a[1]-a[0])?b:a), null);
+const ovl = (a,b) => Math.max(0, Math.min(a[1],b[1]) - Math.max(a[0],b[0]));
+const signed = sec => Math.abs(sec)<1e-9 ? '<span class="good">exactly on time</span>'
+  : `<b>${Math.abs(sec).toFixed(2)} s ${sec>0?'late':'early'}</b>`;
+
+function renderTiming(){
+  // t = 0 at the first frame of the case, so both sides are read against the same origin.
+  const d=S.data, step=d.stride/d.fps, n=d.f.length, zero=d.t[Math.max(0,d.in_case.indexOf('1'))];
+  const T=i=>d.t[i]-zero;
+  const L=[];
+  const bar=(label,span,colour)=>{
+    const left = span ? (span[0]/n*100) : 0, wid = span ? Math.max(1.2,(span[1]-span[0])/n*100) : 0;
+    return `<div class="tlab">${label}</div><div class="tbar">${span?
+      `<i style="left:${left}%;width:${wid}%;background:${colour}"></i>`:''}</div>`;
+  };
+
+  const refD = longest(runsOf(d.ref,'D'));
+  if(refD){
+    const modD = longest(runsOf(d.pred,'D').filter(m=>ovl(m,refD)>0));
+    L.push(`<div class="ln"><span>reference &mdash; ball dead</span><b>${T(refD[0]).toFixed(2)} &rarr;
+      ${T(refD[1]-1).toFixed(2)} s</b></div>`);
+    if(modD){
+      L.push(`<div class="ln"><span>model &mdash; ball dead</span><b>${T(modD[0]).toFixed(2)} &rarr;
+        ${T(modD[1]-1).toFixed(2)} s</b></div>`);
+      const ex = d.extra||{};
+      const se = ex.start_err_s!==undefined ? ex.start_err_s : (modD[0]-refD[0])*step;
+      const ee = ex.end_err_s!==undefined ? ex.end_err_s : (modD[1]-refD[1])*step;
+      L.push(`<div class="ln"><span>whistle &mdash; start of the stoppage</span><span>${signed(se)}</span></div>`);
+      L.push(`<div class="ln"><span>restart &mdash; end of the stoppage</span><span>${signed(ee)}</span></div>`);
+      L.push(`<div class="ln"><span>overlap with the reference span</span>
+        <b>${(ovl(modD,refD)/(refD[1]-refD[0])*100).toFixed(0)}%</b></div>`);
+    } else {
+      L.push(`<div class="ln"><span>model &mdash; ball dead</span>
+        <span class="bad">never, in this whole window</span></div>`);
+      L.push(`<div class="ln"><span>what it played instead</span>
+        <b>${d.pred[refD[0]]} throughout</b></div>`);
+    }
+    L.push(bar('reference',refD,'#8795a6'));
+    L.push(bar('model',modD,modD?'#0e7c66':'#b01b1b'));
+  }
+
+  const chg = seq => { const out=[]; for(let i=1;i<seq.length;i++)
+      if(seq[i]!==seq[i-1] && seq[i]!=='D' && seq[i-1]!=='D') out.push(i); return out; };
+  const tc=chg(d.ref), pcx=chg(d.pred);
+  if(tc.length||pcx.length){
+    L.push('<div class="ln" style="margin-top:6px"><span><b>change of hands</b></span><span></span></div>');
+    L.push(`<div class="ln"><span>reference turnovers here</span>
+      <b>${tc.length?tc.map(i=>T(i).toFixed(2)+' s').join(', '):'none'}</b></div>`);
+    L.push(`<div class="ln"><span>model turnovers here</span>
+      <b>${pcx.length?pcx.map(i=>T(i).toFixed(2)+' s').join(', '):'none'}</b></div>`);
+    if(tc.length&&pcx.length){
+      const lags = tc.map(i=>{
+        const j = pcx.reduce((a,b)=>Math.abs(b-i)<Math.abs(a-i)?b:a, pcx[0]);
+        return (j-i)*step;
+      });
+      L.push(`<div class="ln"><span>nearest model turnover is</span>
+        <span>${lags.map(x=>signed(x)).join(', ')}</span></div>`);
+    }
+  }
+  // for a team-attribution case the stoppage in the window is context, not the case itself
+  const teamCase = ['WRONG_TEAM','MISSED_CHANGE','FALSE_CHANGE','TURNOVER_CAUGHT','SPELL_HELD']
+    .includes(d.kind);
+  $('#timing').innerHTML = '<h4>Timing &mdash; reference vs model</h4>' +
+    (teamCase ? '<div class="note" style="margin-bottom:4px">This case is about <b>which team</b>,'
+      + ' so the dead-ball rows below describe the stoppage that happens to sit in the window'
+      + ' &mdash; context, not the case. The change-of-hands rows are the ones that matter here.'
+      + '</div>' : '') + L.join('') +
+    `<div class="note" style="margin-top:4px">Replay resolution ${step.toFixed(2)} s per step
+     (${d.stride} frames at ${d.fps} fps); t = 0 is the first frame of the case.${(d.extra&&d.extra.start_err_s!==undefined)?
+     ' Whistle and restart errors are exact, measured on every frame.':''}</div>`;
+}
+
+function renderBall(){
+  const d=S.data, n=d.f.length;
+  const inFile=[...d.ball_seen].map(c=>c==='1'), toModel=[...d.ball_seen_model].map(c=>c==='1');
+  const inCase=[...d.in_case].map(c=>c==='1');
+  const pctOf=(arr,m)=>{ const sel=arr.filter((_,i)=>m?m[i]:true);
+    return sel.length ? (100*sel.filter(Boolean).length/sel.length).toFixed(0)+'%' : '&mdash;'; };
+  let gapMax=0, run=0;
+  toModel.forEach(v=>{ run = v?0:run+1; gapMax=Math.max(gapMax,run); });
+  const held = inFile.filter((v,i)=>v&&!toModel[i]).length;
+  $('#ballblk').innerHTML = `<h4>Where is the ball &mdash; and did the model have it?</h4>
+    <div class="ln"><span>ball tracked in the data file</span><b>${pctOf(inFile)} of the window</b></div>
+    <div class="ln"><span>ball the model was allowed to use</span><b>${pctOf(toModel)} of the window</b></div>
+    <div class="ln"><span>inside the case window itself</span><b>${pctOf(toModel,inCase)} usable</b></div>
+    <div class="ln"><span>longest unbroken stretch with no ball</span>
+      <b>${(gapMax*d.stride/d.fps).toFixed(2)} s</b></div>
+    <div class="ln"><span>steps in the file but held out from the model</span>
+      <b>${held} of ${n}</b></div>
+    <div class="note" style="margin-top:4px"><b>The gap between those two lines is deliberate.</b>
+      IDSSE never loses the ball; the competition match loses it on <b>41%</b> of graded frames, so
+      stage 3 is trained and scored with the ball hidden in contiguous bursts at that same rate.
+      What you see here is the harder, honest condition, not a data fault.</div>
+    <div class="note" style="margin-top:4px">Stage 2 (live or dead) never reads the ball &mdash; it
+      decides from the 22 player tracks alone, which is why a hidden ball barely moves its error
+      rate. Stage 3 (which team) does depend on it, and falls back to pitch control and player
+      geometry where it is missing. The amber ring on the pitch marks a frame the model had to work
+      without it.</div>`;
+}
+
+/* ---------------------------------------------------------------- playback */
+function tick(ts){
+  if(!S.playing||!S.data) return;
+  const stepMs = (S.data.stride/S.data.fps)*1000/S.speed;
+  if(ts-S.last>=stepMs){
+    S.last=ts;
+    S.i++;
+    if(S.i>=S.data.f.length){ S.i=S.data.f.length-1; stop(); }
+    $('#scrub').value=S.i; draw(); drawBands();
+  }
+  requestAnimationFrame(tick);
+}
+function play(){ if(!S.data) return; S.playing=true; S.last=0;
+  $('#play').textContent='Pause'; requestAnimationFrame(tick); }
+function stop(){ S.playing=false; $('#play').textContent='Play'; }
+$('#play').onclick = ()=> S.playing?stop():play();
+$('#back').onclick = ()=>{ stop(); S.i=Math.max(0,S.i-1); $('#scrub').value=S.i; draw(); drawBands(); };
+$('#fwd').onclick  = ()=>{ stop(); if(S.data) S.i=Math.min(S.data.f.length-1,S.i+1);
+                           $('#scrub').value=S.i; draw(); drawBands(); };
+$('#scrub').oninput = e =>{ stop(); S.i=+e.target.value; draw(); drawBands(); };
+document.querySelectorAll('.speed button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.speed button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); S.speed=+b.dataset.s;
+});
+document.addEventListener('keydown', e=>{
+  if(e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'||e.target.tagName==='INPUT') return;
+  if(e.key===' '){ e.preventDefault(); S.playing?stop():play(); }
+  if(e.key==='ArrowLeft') $('#back').click();
+  if(e.key==='ArrowRight') $('#fwd').click();
+});
+
+/* ---------------------------------------------------------------- feedback */
+async function save(extra){
+  if(!S.cur) return;
+  const body = Object.assign({
+    case_id:S.cur, comment:$('#comment').value, verdict:$('#verdictSel').value,
+    proposed_label:$('#proposed').value, updated:new Date().toISOString()
+  }, extra||{});
+  const r = await fetch('api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+                                        body:JSON.stringify(body)});
+  if(r.ok){
+    S.fb[S.cur] = Object.assign(S.fb[S.cur]||{}, body);
+    $('#savedMsg').textContent='saved '+new Date().toLocaleTimeString();
+    renderList();
+  } else { $('#savedMsg').textContent='save failed — is server.py running?'; }
+}
+$('#save').onclick = ()=>save();
+
+/* A comment typed and then lost by clicking the next case is worse than no comment box at all,
+   so the box saves itself: a second after typing stops, and immediately on leaving the field or
+   the page. The server merges per field, so this never clears a verdict or a bookmark. */
+let typeT=0;
+$('#comment').addEventListener('input', ()=>{
+  if(!S.cur) return;
+  $('#savedMsg').textContent='typing…';
+  clearTimeout(typeT);
+  typeT = setTimeout(()=>save(), 1000);
+});
+$('#comment').addEventListener('blur', ()=>{ if(S.cur && $('#comment').value!==(S.fb[S.cur]||{}).comment){ clearTimeout(typeT); save(); } });
+['#verdictSel','#proposed'].forEach(sel=>$(sel).addEventListener('change', ()=>save()));
+window.addEventListener('beforeunload', ()=>{
+  if(!S.cur) return;
+  const f=S.fb[S.cur]||{};
+  if($('#comment').value === (f.comment||'')) return;
+  navigator.sendBeacon('api/feedback', new Blob([JSON.stringify({
+    case_id:S.cur, comment:$('#comment').value, verdict:$('#verdictSel').value,
+    proposed_label:$('#proposed').value, updated:new Date().toISOString()
+  })], {type:'application/json'}));
+});
+$('#book').onclick = ()=>{
+  const now = !(S.fb[S.cur]||{}).bookmarked;
+  $('#book').classList.toggle('on', now);
+  save({bookmarked:now});
+};
+
+/* ---------------------------------------------------------------- patterns */
+async function loadPatterns(){
+  let p; try { p = await (await fetch('data/patterns.json',{cache:'no-store'})).json(); } catch(e){ return; }
+  // Plain readings for the flag names, so the summary needs no glossary.
+  const PLAIN = {
+    within_1s_of_turnover:'the ball has just changed hands (within a second)',
+    within_3s_of_restart:'play has just restarted (within three seconds)',
+    reference_contested:'the two reference sources disagree with each other',
+    ball_unseen_any:'the ball is missing from the tracking',
+    ball_unseen_2s:'the ball has been missing for two seconds or more',
+    contested_margin_1m:'both teams are within a metre of the ball',
+    loose_ball_5m:'the ball is loose &mdash; nobody within five metres',
+    partial_tracking:'some players are missing from the tracking'
+  };
+  const plain = f => PLAIN[f] || f.replace(/_/g,' ');
+
+  const tbl = (t,title,note) => {
+    const rows = t.rows.map(r=>`<tr>
+        <td class="name">${plain(r.flag)}</td>
+        <td>${(r.coverage*100).toFixed(1)}%</td>
+        <td>${r.err_in.toFixed(3)}</td>
+        <td>${r.err_out.toFixed(3)}</td>
+        <td style="color:${r.lift>1.5?'#b01b1b':(r.lift<0.7?'#0e7c66':'#5b6878')}">
+          ${r.lift.toFixed(2)}&times;</td>
+        <td><div class="bar"><i style="width:${Math.min(100,r.share_of_errors*100)}%"></i></div></td>
+        <td>${(r.share_of_errors*100).toFixed(0)}%</td></tr>`).join('');
+    return `<h3>${title}</h3><div class="note">base error rate ${t.base.toFixed(3)} &middot; ${note}</div>
+      <table style="margin-top:6px"><tr><th>when&hellip;</th><th>how often</th><th>error inside</th>
+      <th>error outside</th><th>times worse</th><th>share of all errors</th><th></th></tr>${rows}</table>`;
+  };
+
+  const worst = [...p.targets.wrong_team.rows, ...p.targets.wrong_dead.rows]
+    .sort((a,b)=>b.lift-a.lift).slice(0,3);
+  const c = p.contested;
+  $('#patterns').innerHTML = `
+    <h3 style="margin-top:4px">The three conditions the model struggles with most</h3>
+    <div class="note">Across ${p.n_frames.toLocaleString()} graded frames in
+      ${p.matches.length} development matches.</div>
+    <div class="top3">${worst.map(r=>`<div class="t3">
+      <div><b>When ${plain(r.flag)}</b>
+        <div class="sm">happens on ${(r.coverage*100).toFixed(0)}% of frames &middot;
+          ${(r.share_of_errors*100).toFixed(0)}% of all the model&rsquo;s mistakes sit here</div></div>
+      <div><div class="big">${r.lift.toFixed(1)}&times;</div>
+        <div class="sm" style="text-align:right">more mistakes than usual</div></div></div>`).join('')}
+    </div>
+    <div class="caution"><b>Read these as &ldquo;where&rdquo;, not &ldquo;why&rdquo;.</b> A flag
+      marks frames where the model is unreliable, which is useful on its own. It is not evidence
+      that the flagged condition <i>causes</i> the mistake. Thresholds are round numbers chosen in
+      advance, not fitted to the error rate.</div>
+    <details><summary style="cursor:pointer;color:#5b6878;font-weight:600;margin:6px 0">
+      Show the full tables</summary>
+    ${tbl(p.targets.wrong_team,'Picking the wrong team','frames both the model and the reference call live')}
+    ${tbl(p.targets.wrong_dead,'Live or dead','every graded frame')}
+    <h3>How settled is the reference itself?</h3>
+    <table><tr><th>measure</th><th>value</th></tr>
+      <tr><td class="name">live frames where the DFL's two products disagree</td>
+          <td>${(c.share_of_live_frames*100).toFixed(1)}%</td></tr>
+      <tr><td class="name">our team error rate on those frames</td>
+          <td>${c.err_on_contested.toFixed(3)}</td></tr>
+      <tr><td class="name">our team error rate where they agree</td>
+          <td>${c.err_on_corroborated.toFixed(3)}</td></tr>
+      <tr><td class="name">share of all our team errors sitting on contested frames</td>
+          <td>${(c.share_of_errors_on_contested*100).toFixed(1)}%</td></tr></table>
+    <h3>Does each pattern hold in every match?</h3>
+    <div class="note">A pattern that only appears in one match is noise; &ldquo;consistent&rdquo;
+      means it points the same way in all five.</div>
+    <table style="margin-top:6px"><tr><th>when&hellip;</th>
+      ${p.matches.map(m=>`<th>${m}</th>`).join('')}<th>consistent</th></tr>
+      ${p.per_match_lift.map(r=>`<tr><td class="name">${plain(r.index)}</td>
+        ${p.matches.map(m=>`<td>${r[m]===null?'—':(+r[m]).toFixed(2)}</td>`).join('')}
+        <td style="color:${r.consistent?'#0e7c66':'#9a6208'}">${r.consistent?'yes':'no'}</td></tr>`).join('')}
+    </table></details>`;
+}
+
+/* ------------------------------------------------------------- how it is doing
+   One table in two halves: how accurate the model is, and what is still wrong with it. Every
+   number comes from review/scoreboard.py, which scores the same predictions and reads the same
+   case index this page's Cases tab reads -- so a row in the lower half always lands on exactly
+   the cases it counts. */
+async function loadScore(){
+  let s; try { s = await (await fetch('data/scoreboard.json',{cache:'no-store'})).json(); } catch(e){ return; }
+  const a = s.accuracy, b = s.accuracy_before, c = s.cases;
+  const n = v => v.toLocaleString();
+  const sec = v => v.toFixed(2)+' s';
+
+  /* A change is good or bad depending on the measure: for a score, higher is better; for a
+     timing error or a count of mistakes, lower is. Where the organisers publish a noise band,
+     a move smaller than the band is reported as noise and not as an improvement. */
+  const chg = (now, was, lowerBetter, band, dp) => {
+    const d = now - was, show = (d>0?'+':'') + d.toFixed(dp===undefined?0:dp);
+    if(band!==undefined && Math.abs(d)<band) return ['flat', show+' (noise)'];
+    if(Math.abs(d) < (dp? Math.pow(10,-dp)/2 : 0.5)) return ['flat','no change'];
+    return [(lowerBetter? d<0 : d>0) ? 'up' : 'down', show];
+  };
+  const unit = (ch, u) => [ch[0], /no change|noise/.test(ch[1]) ? ch[1] : ch[1]+u];
+  const row = (name, now, was, ch, what) =>
+    `<tr><td class="name">${name}</td><td>${now}</td><td class="flat">${was}</td>
+       <td class="${ch[0]}">${ch[1]}</td><td class="what">${what}</td></tr>`;
+
+  const kinds = Object.entries(c.by_kind).sort((x,y)=>y[1].total-x[1].total);
+  const caseRow = ([k,v]) => {
+    const ch = chg(v.total, v.before, true);
+    return `<tr class="go" data-kind="${k}"><td class="name">${kindName(k)}</td>
+      <td>${n(v.total)}</td><td class="flat">${n(v.before)}</td>
+      <td class="${ch[0]}">${ch[1]}${v.new?' &middot; '+v.new+' new':''}</td>
+      <td class="what">${c.what[k]||''} &mdash; ${v.confirmed} confirmed, ${v.contested} contested
+        &middot; <b>${v.with_bundle} to watch</b>${v.visible===undefined?'':
+          ' &middot; '+v.visible+' with the ball in sight'}</td></tr>`;
+  };
+
+  $('#score').innerHTML = `
+    <h3 style="margin-top:4px">Where the model stands</h3>
+    <div class="note">${s.matches.length} development matches &middot; ${s.scope} &middot;
+      measured ${s.taken.slice(0,10)}. <b>Before</b> is the model as it was before the restart,
+      corner, flight, touch and whistle work.</div>
+    <table style="margin-top:8px">
+      <tr><th style="width:26%">measure</th><th style="width:10%">now</th>
+        <th style="width:10%">before</th><th style="width:14%">change</th><th>what it means</th></tr>
+      <tr class="band"><td colspan="5">How accurate it is</td></tr>
+      ${row('spellF1', a.spellF1.toFixed(3), b.spellF1.toFixed(3),
+            chg(a.spellF1, b.spellF1, false, s.bands.spellF1, 3),
+            'the metric that decides the ranking: possessions matched whole, not frame by frame. '+
+            'Moves smaller than '+s.bands.spellF1+' are noise')}
+      ${row('macroF1', a.macroF1.toFixed(3), b.macroF1.toFixed(3),
+            chg(a.macroF1, b.macroF1, false, s.bands.macroF1, 3),
+            'frame-by-frame agreement, averaged over home / away / dead')}
+      ${row('right team while the ball is live',
+            (a.team_acc_live*100).toFixed(1)+'%', (b.team_acc_live*100).toFixed(1)+'%',
+            unit(chg(a.team_acc_live*100, b.team_acc_live*100, false, undefined, 1), ' pts'),
+            'of '+n(a.live_frames)+' frames the reference calls live')}
+      ${row('stoppages found at all', a.stoppages_found+' of '+a.stoppages_total,
+            b.stoppages_found+' of '+b.stoppages_total,
+            chg(a.stoppages_found, b.stoppages_found, false),
+            'the '+(a.stoppages_total-a.stoppages_found)+' it never notices are the gap no rule '+
+            'has closed yet')}
+      ${row('whistle timing', sec(a.whistle_err_s), sec(b.whistle_err_s),
+            unit(chg(a.whistle_err_s, b.whistle_err_s, true, undefined, 2), ' s'),
+            'median error on where the stoppage STARTS, over '+a.edges_timed+' stoppages &mdash; '+
+            'what the players-slowing-down rule was built to fix')}
+      ${row('restart timing', sec(a.restart_err_s), sec(b.restart_err_s),
+            unit(chg(a.restart_err_s, b.restart_err_s, true, undefined, 2), ' s'),
+            'median error on where play RESUMES &mdash; already read off the ball being kicked')}
+      ${row('restart timing, worst half', sec(a.restart_err_mean_s), sec(b.restart_err_mean_s),
+            unit(chg(a.restart_err_mean_s, b.restart_err_mean_s, true, undefined, 2), ' s'),
+            'the mean, which counts the badly missed edges the median hides')}
+      ${row('team right after a restart', a.restart_team_right+' of '+a.restart_team_total,
+            b.restart_team_right+' of '+b.restart_team_total,
+            chg(a.restart_team_right, b.restart_team_right, false),
+            'who the model gives the ball to in the two seconds after play resumes')}
+      ${row('false switches', n(a.false_switches), n(b.false_switches),
+            chg(a.false_switches, b.false_switches, true),
+            'the model changed team when the reference did not &mdash; the price paid for the '+
+            'touch rule, and the next thing to work on')}
+      ${row('missed switches', n(a.missed_switches), n(b.missed_switches),
+            chg(a.missed_switches, b.missed_switches, true),
+            'the ball changed hands and the model stayed put')}
+      <tr class="band"><td colspan="5">What is still wrong &mdash; ${n(c.failures)} cases,
+        was ${n(c.failures_before)} &middot; ${c.new_since_fix} of them new since the latest change
+        &middot; click a row to open those cases</td></tr>
+      ${kinds.map(caseRow).join('')}
+      ${c.ball_visible ? `<tr class="go" data-ball="seen"><td class="name">of those, the ones
+          with the ball in sight</td><td>${n(c.ball_visible.total)}</td>
+        <td class="flat">${(100*c.ball_visible.total/c.failures).toFixed(0)}% of all</td>
+        <td class="flat">${n(c.ball_visible.confirmed)} confirmed</td>
+        <td class="what">the ball was tracked and visible to the model for
+          ${(100*c.ball_visible.threshold).toFixed(0)}%+ of the window, so the evidence you can see
+          is the evidence it had &mdash; these are the ones worth teaching it.
+          <b>${n(c.ball_visible.with_bundle)} to watch.</b> Click to open them</td></tr>
+      <tr><td class="name">and the ones with no ball to see</td>
+        <td>${n(c.ball_visible.half_blind)}</td>
+        <td class="flat">${(100*c.ball_visible.half_blind/c.failures).toFixed(0)}% of all</td>
+        <td class="flat">${n(c.ball_visible.never_seen)} never at all</td>
+        <td class="what">the ball is hidden for more than half the window, so the model was going
+          on where play had been. Nothing in the clip says what the right answer was, and no rule
+          read off the ball can reach them</td></tr>` : ''}
+      <tr><td class="name">cases it gets right</td><td>${n(c.correct)}</td>
+        <td class="flat">&mdash;</td><td class="flat"></td>
+        <td class="what">stoppages caught, changes of hands caught, long possessions held &mdash;
+          counted separately, because finding more of them is not the model improving</td></tr>
+    </table>
+    <div class="caution" style="margin-top:14px"><b>Read the two halves together.</b> spellF1 and
+      macroF1 move in hundredths and have published noise bands; the case counts and the timing
+      errors are measured over hundreds of separate events and are where a change shows up
+      honestly. A change that only moves <i>contested</i> cases has moved its agreement with one of
+      two disagreeing reference products, not its accuracy.</div>`;
+
+  [...document.querySelectorAll('#score tr.go')].forEach(el => el.onclick = () => {
+    $('#fBucket').value = 'failure';
+    $('#fKind').value = el.dataset.kind || '';
+    $('#fBall').value = el.dataset.ball || '';
+    $('#fMatch').value = ''; $('#fBook').checked = false;
+    renderList(); tab('cases');
+  });
+}
+
+/* ---------------------------------------------------------------- folding panels
+   Each panel folds from its own heading. Which ones are shut is remembered in this browser,
+   and nothing else depends on it: a shut panel is only hidden, never unloaded. */
+function setupFolds(){
+  const PANELS = [['#casesView section.panel:nth-of-type(1)','pick'],
+                  ['#casesView section.panel:nth-of-type(2)','replay'],
+                  ['#casesView section.panel:nth-of-type(3)','read']];
+  let shut = {};
+  try { shut = JSON.parse(localStorage.getItem('foldShut')||'{}'); } catch(e){ shut = {}; }
+  PANELS.forEach(([sel,key])=>{
+    const p = document.querySelector(sel); if(!p) return;
+    const h = p.querySelector('h2'); if(!h) return;
+    h.classList.add('fold');
+    h.insertAdjacentHTML('afterbegin','<span class="caret">&#9662;</span> ');
+    if(shut[key]) p.classList.add('shut');
+    h.addEventListener('click', ()=>{
+      p.classList.toggle('shut');
+      shut[key] = p.classList.contains('shut');
+      try { localStorage.setItem('foldShut', JSON.stringify(shut)); } catch(e){}
+      if(!p.classList.contains('shut')) draw();
+    });
+  });
+}
+
+function tab(which){
+  const views = {cases:['#casesView','grid'], patterns:['#patterns','block'],
+                 demo:['#demo','block'], score:['#score','block']};
+  for(const [k,[sel,disp]] of Object.entries(views)){
+    $(sel).style.display = (k===which? disp : 'none');
+    $('#tab'+k[0].toUpperCase()+k.slice(1)).classList.toggle('on', k===which);
+  }
+  if(which!=='demo'){ const v=$('#demovid'); if(v) v.pause(); }
+  if(which!=='cases') stop();
+}
+$('#tabCases').onclick = ()=>tab('cases');
+$('#tabPatterns').onclick = ()=>tab('patterns');
+$('#tabDemo').onclick = ()=>tab('demo');
+$('#tabScore').onclick = ()=>tab('score');
+
+let resizeT=0;
+window.addEventListener('resize', ()=>{
+  clearTimeout(resizeT);
+  resizeT = setTimeout(()=>{ draw(); if(S.data) drawBands(); }, 120);
+});
+
+boot();
+draw();   // show the empty pitch before a case is chosen
+</script>
+</body>
+</html>

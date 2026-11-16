@@ -1,0 +1,104 @@
+# This directory holds the competition's match assets -- 19 GB of video, the ATD, the homography
+# and the Smart Tagging -- and they are NOT redistributable. The terms accepted at enrolment say
+# so, and SUBMISSION.md repeats it: "Make sure the match data is not in it."
+#
+# So this file is a WHITELIST, not a blacklist. Everything is excluded by default and only the
+# files named below are tracked. A blacklist has to anticipate every way data could arrive; a
+# whitelist cannot be defeated by a file nobody thought of. The hard exclusions at the bottom run
+# last and override every rule above them, so even an over-broad whitelist cannot pull data in.
+#
+# Check what would be committed with:  git status --porcelain  /  git ls-files
+
+*
+!*/
+
+# ---------------------------------------------------------------- documents and configuration
+!/README.md
+!/TECHNICAL_DOCUMENT.md
+!/PROJECT_GUIDE.md
+!/requirements.txt
+!/.gitignore
+
+# NOT published: the draft data-request letter carries a real name and contact details, and it is
+# not part of the submission. Personal information does not go into a public repository.
+/Sportec_IDSSE_data_request_DRAFT.md
+
+# ---------------------------------------------------------------- the submission pipeline
+!/submit/*.py
+!/submit/README.md
+!/submit/models/*.txt
+!/submit/models/*.npz
+!/submit/models/manifest.json
+
+# ---------------------------------------------------------------- the model
+!/stage2/*.py
+!/stage2/*.md
+!/stage3/*.py
+!/stage3/*.md
+
+# measurements on the open-access training matches: small CSVs, no competition data in them
+!/stage2/res*.csv
+!/stage2/results*.csv
+!/stage3/results*.csv
+
+# ---------------------------------------------------------------- training-data provenance
+!/external_data/scripts/*.py
+!/external_data/scripts/sources.json
+!/external_data/*.md
+!/external_data/docs/*.md
+!/external_data/reports/*.md
+!/external_data/reports/*.csv
+
+# ---------------------------------------------------------------- the failure-review tool
+!/review/*.py
+!/review/*.html
+!/review/*.md
+
+# ---------------------------------------------------------------- local verification
+!/local_checks/*.py
+
+# ================================================================ HARD EXCLUSIONS
+# These come last and win over every whitelist above.
+
+# the competition's assets, in the delivered layout and in the one the download arrives in
+/data/
+/More Than A Hack*/
+/more-than-a-hack-2027-main/
+
+# anything derived from them
+/submit/processed/
+/submit/work/
+/submit/out/
+/submit/reports/
+
+# third-party datasets: the IDSSE download, the SoccerNet-GAR probe (NDA-restricted), and
+# everything parsed out of them
+/external_data/raw/
+/external_data/processed/
+
+# model artefacts and intermediates that are rebuilt from the scripts
+/stage2/features*/
+/stage2/predictions*/
+/stage2/cases/
+/stage2/pdf/
+/stage3/features/
+/stage3/pitch_control/
+/stage3/player_labels/
+/stage3/predictions*/
+/stage3/emission_models/
+/review/data/
+/review/snapshots/
+/review/feedback/
+/review/demo/
+/deck/
+
+# by extension, wherever they appear
+*.mp4
+*.parquet
+*.pptx
+*.pdf
+*.xml
+*.log
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

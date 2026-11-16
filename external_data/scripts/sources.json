@@ -1,0 +1,98 @@
+{
+  "_comment": [
+    "Acquisition configuration for Stage 1 external data collection.",
+    "More Than a Hack 2027 - Phase 1: Ball Possession.",
+    "",
+    "Each source records where it came from, what licence it carries, what attribution is",
+    "required, and which files are in scope. File lists are DISCOVERED at run time from each",
+    "host's API rather than hard-coded, so the manifest reflects the tree as it actually is.",
+    "",
+    "NOTHING in this file refers to the competition match. The competition assets are",
+    "deliberately kept outside the external corpus."
+  ],
+  "review_date": "2026-10-29",
+  "competition_repo_commit": "f8f2629ff1e0985f81d7e59d8413678514ee1530",
+
+  "sources": {
+    "metrica": {
+      "name": "Metrica Sports sample data",
+      "role": "core",
+      "homepage": "https://github.com/metrica-sports/sample-data",
+      "discovery": {"kind": "github_tree", "repo": "metrica-sports/sample-data", "ref": "master"},
+      "raw_base": "https://raw.githubusercontent.com/metrica-sports/sample-data/master/",
+      "include_prefixes": ["data/", "documentation/"],
+      "include_files": ["README.md"],
+      "exclude_substrings": [],
+      "lfs": false,
+      "licence": "No SPDX licence stated in the repository. The README asks users to be responsible with the data and to acknowledge the source when used publicly.",
+      "licence_status": "permissive-by-request-attribution; NOT a formal open licence",
+      "attribution": "Metrica Sports, sample data (https://github.com/metrica-sports/sample-data)",
+      "why": "Same provider as the competition. Sample Game 3 uses the EPTS/FIFA format family, the same as the competition ATD. 25 fps, frames from 1, coordinates normalised 0-1, pitch 105x68."
+    },
+
+    "idsse": {
+      "name": "IDSSE - integrated spatiotemporal and event dataset, elite soccer (Bundesliga)",
+      "role": "core",
+      "homepage": "https://github.com/spoho-datascience/idsse-data",
+      "data_doi": "https://doi.org/10.6084/m9.figshare.28196177",
+      "discovery": {"kind": "hf_dataset", "repo": "pysport/idsse-data"},
+      "raw_base": "https://huggingface.co/datasets/pysport/idsse-data/resolve/main/",
+      "include_prefixes": ["DFL_"],
+      "include_files": ["README.md"],
+      "exclude_substrings": [],
+      "lfs": false,
+      "licence": "CC-BY-4.0",
+      "licence_status": "open",
+      "attribution": "Data provided with authorisation of the Deutsche Fussball Liga (DFL). Cite Bassek, M., Rein, R., Weber, H., Memmert, D. (2025). An integrated dataset of spatiotemporal and event data in elite soccer. Scientific Data, 12(1), 195. https://doi.org/10.1038/s41597-025-04505-y",
+      "why": "7 full Bundesliga matches with official DFL event data and TRACAB position data at 25 fps, carrying BallPossession and BallStatus provider fields - the closest thing to reference H/A/D labels available under an open licence."
+    },
+
+    "skillcorner": {
+      "name": "SkillCorner Open Data",
+      "role": "supplementary-core",
+      "homepage": "https://github.com/SkillCorner/opendata",
+      "discovery": {"kind": "github_tree", "repo": "SkillCorner/opendata", "ref": "master"},
+      "raw_base": "https://raw.githubusercontent.com/SkillCorner/opendata/master/",
+      "lfs_base": "https://media.githubusercontent.com/media/SkillCorner/opendata/master/",
+      "include_prefixes": ["data/matches/"],
+      "include_files": ["README.md", "LICENSE", "data/matches.json"],
+      "exclude_substrings": ["bodypose", "aggregates"],
+      "lfs": true,
+      "lfs_suffixes": [".jsonl"],
+      "licence": "MIT",
+      "licence_status": "open",
+      "attribution": "SkillCorner Open Data (https://github.com/SkillCorner/opendata), MIT Licence, Copyright (c) 2020 SkillCorner",
+      "why": "20 A-League matches of broadcast tracking with provider-inferred possession and phases of play. Broadcast tracking is noisier and sparser than optical tracking, which makes it a useful robustness domain. Documented at 10 fps - NOT 25.",
+      "excluded_on_purpose": "data/bodypose/ and data/aggregates/ are out of scope for frame-level possession and are not downloaded."
+    },
+
+    "statsbomb": {
+      "name": "StatsBomb Open Data",
+      "role": "supporting",
+      "homepage": "https://github.com/statsbomb/open-data",
+      "discovery": {"kind": "github_contents", "repo": "statsbomb/open-data", "paths": ["", "doc"]},
+      "raw_base": "https://raw.githubusercontent.com/statsbomb/open-data/master/",
+      "include_prefixes": ["doc/"],
+      "include_files": ["README.md", "LICENSE.pdf"],
+      "exclude_substrings": [".DS_Store"],
+      "lfs": false,
+      "licence": "StatsBomb user agreement, see LICENSE.pdf in the repository",
+      "licence_status": "needs-review",
+      "attribution": "StatsBomb Open Data",
+      "why": "Schema documentation only. StatsBomb open data is event data plus 360 freeze frames, not continuous tracking, so it cannot supply frame-level H/A/D. Downloaded for its specification documents so the event vocabulary can be compared with Metrica's and the DFL's.",
+      "excluded_on_purpose": "The data/ corpus is NOT downloaded: without continuous tracking it has no role in this task."
+    },
+
+    "gradient_sports": {
+      "name": "Gradient Sports (formerly PFF FC) - enhanced 2022 World Cup dataset",
+      "role": "conditional",
+      "homepage": "https://www.gradientsports.com/blog/enhanced-2022-world-cup-dataset",
+      "discovery": {"kind": "none"},
+      "licence": "unknown",
+      "licence_status": "pending",
+      "attribution": "pending",
+      "why": "Reported to combine broadcast tracking with event data for all 64 matches of the 2022 World Cup.",
+      "status": "NOT DOWNLOADED. Access appears to require a request form or account registration, and no dataset-specific licence permitting machine-learning use and third-party reproduction has been located. The user instructed that no accounts be registered and no personal details submitted. Recorded as pending; a free-access offer is not proof of an open licence."
+    }
+  }
+}

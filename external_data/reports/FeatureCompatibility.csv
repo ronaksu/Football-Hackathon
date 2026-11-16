@@ -1,0 +1,13 @@
+field,available_in_competition_data,note
+"ball_x, ball_y",yes,"ATD carries ball x,y normalised 0-1 when the ball is tracked"
+ball_observed,yes,ATD writes NaN for an untracked ball
+ball_speed_mps,yes,derivable from consecutive frames; ATD also ships a speed field
+"n_home_observed, n_away_observed",yes,ATD metadata assigns every track slot to a team
+"home/away centroid, spread",yes,"collective, computed from slot positions"
+"nearest_home_m, nearest_away_m, nearest_margin_m",yes,"collective, no identity needed"
+period,yes,games.half_video_blocks gives the two graded halves
+ball height (Z),NO,"IDSSE/DFL provides a Z coordinate. The competition ATD does not. MUST NOT be used as a feature, and must not be used to derive one."
+player identity / shirt number,NO,"the competition has 46 anonymous track slots that start, stop and swap; any feature keyed on a person cannot be computed at deployment"
+per-player speed/acceleration,partial,"DFL ships S and A per player and the ATD ships a speed field, but SkillCorner does not; a feature using it cannot be trained on SkillCorner"
+Smart Tagging phases,competition-only,"the competition has 638 tagged phases; SkillCorner has phases_of_play but Metrica and DFL have nothing equivalent, so a tagging-dependent feature cannot be trained externally"
+image_corners_projection / homography,partial,the competition ships a per-frame homography; only SkillCorner has an analogue

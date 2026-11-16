@@ -1,0 +1,31 @@
+source,match_id,group,split,reason
+idsse,DFL-MAT-J03WOH,DFL-COM-000002 | home Fortuna Düsseldorf,train,largest competition block (DFL-COM-000002); held-out match validates within-domain
+idsse,DFL-MAT-J03WOY,DFL-COM-000002 | home Fortuna Düsseldorf,train,largest competition block (DFL-COM-000002); held-out match validates within-domain
+idsse,DFL-MAT-J03WPY,DFL-COM-000002 | home Fortuna Düsseldorf,train,largest competition block (DFL-COM-000002); held-out match validates within-domain
+idsse,DFL-MAT-J03WQQ,DFL-COM-000002 | home Fortuna Düsseldorf,train,largest competition block (DFL-COM-000002); held-out match validates within-domain
+idsse,DFL-MAT-J03WR9,DFL-COM-000002 | home Fortuna Düsseldorf,validation,largest competition block (DFL-COM-000002); held-out match validates within-domain
+idsse,DFL-MAT-J03WMX,DFL-COM-000001 | home 1. FC Köln,test,different competition (DFL-COM-000001) and no team shared with the training block - genuine held-out evaluation
+idsse,DFL-MAT-J03WN1,DFL-COM-000001 | home VfL Bochum 1848,test,different competition (DFL-COM-000001) and no team shared with the training block - genuine held-out evaluation
+metrica,metrica_sample_game_1,,train,"weak labels; usable as training signal, never for scoring"
+metrica,metrica_sample_game_2,,train,"weak labels; usable as training signal, never for scoring"
+metrica,metrica_sample_game_3,,train,"weak labels; usable as training signal, never for scoring"
+skillcorner,1874553,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,1886347,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,1899585,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,1925299,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,1927964,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,1953632,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,1959846,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,1986691,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,1996435,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,1996436,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,2006229,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,2006363,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,2007448,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,2007721,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,2010085,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,2011166,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,2013725,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,2015213,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,2016236,,robustness,domain-shift probe only; never trained or scored on
+skillcorner,2017461,,robustness,domain-shift probe only; never trained or scored on

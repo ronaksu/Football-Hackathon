@@ -1,0 +1,21 @@
+# Pinned to the versions the submitted file was produced with.
+#
+# The scorer itself needs only numpy and pandas, which is why the competition's own
+# requirements.txt is two lines long. This pipeline adds LightGBM for the two classifiers and
+# pyarrow for the intermediate parquet files.
+
+numpy==2.4.1
+pandas==3.0.0
+pyarrow==26.0.0
+lightgbm==4.6.0
+scipy==1.17.0
+
+# Only for the duration priors' kernel-density option and the review tool's clustering.
+scikit-learn==1.8.0
+
+# Optional. The pipeline reads the ATD with the standard library, exactly as the competition's
+# own baseline does, so kloppy is not required to produce the submission. It is useful for
+# cross-checking the parse against a second reader.
+# kloppy==3.18.0
+
+# Python 3.14.2 was used. Nothing here needs it; 3.10 or later should work.
