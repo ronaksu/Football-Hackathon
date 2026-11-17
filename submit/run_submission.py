@@ -41,6 +41,39 @@ def run(label, args):
         raise SystemExit("\n{} failed with exit code {}".format(label, done.returncode))
 
 
+def find_validator():
+    """The organisers' validate_submission.py, wherever the challenge repository is.
+
+    It is not vendored here -- it is theirs, and a stale copy of a validator is worse than none.
+    So this looks in the places a checkout of it plausibly sits relative to this one: inside this
+    repository, beside it, or one level up. MTAH_REPO overrides all of them. Returns None rather
+    than guessing, and the caller then prints the command to run by hand.
+    """
+    env = os.environ.get("MTAH_REPO")
+    roots = ([env] if env else []) + [ROOT, os.path.dirname(ROOT)]
+    for root in roots:
+        if not root or not os.path.isdir(root):
+            continue
+        direct = os.path.join(root, "evaluation", "validate_submission.py")
+        if os.path.exists(direct):
+            return direct
+        for entry in sorted(os.listdir(root)):
+            if not entry.lower().startswith("more-than-a-hack"):
+                continue
+            outer = os.path.join(root, entry)
+            # A GitHub zip of the challenge unpacks to a folder containing a folder, and the two
+            # are not always named the same once anyone has renamed either, so the inner level is
+            # scanned rather than guessed.
+            candidates = [outer] + [os.path.join(outer, child)
+                                    for child in sorted(os.listdir(outer))
+                                    if os.path.isdir(os.path.join(outer, child))]
+            for base in candidates:
+                found = os.path.join(base, "evaluation", "validate_submission.py")
+                if os.path.exists(found):
+                    return found
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--team-name", required=True)
@@ -79,14 +112,13 @@ def main():
          "--work-dir", args.work_dir, "--out-dir", args.out_dir])
 
     csv = os.path.join(args.out_dir, args.team_name + ".csv")
-    validator = os.path.join(ROOT, "more-than-a-hack-2027-main",
-                             "more-than-a-hack-2027-main", "evaluation",
-                             "validate_submission.py")
-    if os.path.exists(validator):
+    validator = find_validator()
+    if validator:
         run("6/6  validate", [validator, csv])
     else:
-        print("\n6/6  validate: the challenge repository is not beside this one, so the "
-              "organisers' validator was not run. Run it yourself before uploading:"
+        print("\n6/6  validate: could not find the challenge repository's "
+              "evaluation/validate_submission.py. Point MTAH_REPO at your checkout of it, or "
+              "run it yourself before uploading -- do not skip it:"
               "\n     python evaluation/validate_submission.py \"{}\"".format(csv))
 
     digest = hashlib.sha256(open(csv, "rb").read()).hexdigest()
