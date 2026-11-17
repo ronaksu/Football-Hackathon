@@ -1,0 +1,21 @@
+# LightGBM writes a model as a .txt file, but it is not text in the line-ending sense. Git on
+# Windows treats .txt as text by default and rewrites LF to CRLF on checkout, which corrupts it:
+# a fresh clone then fails to load the model at all, with
+#
+#     [LightGBM] [Fatal] Model format error, expect a tree here
+#
+# and the submission cannot be reproduced. Found by cloning this repository into an empty
+# directory and running the pipeline from the clone, which is the only way to find it -- the
+# working copy the models were written in is fine, and so is the blob in the repository. Only
+# the checkout is wrong, so nothing here is visible until somebody else clones it.
+#
+# These are the two files the whole reproduction depends on.
+submit/models/*.txt -text
+submit/models/*.npz binary
+
+# Everything else is genuinely text and may be normalised as usual.
+*.py text
+*.md text
+*.csv text
+*.json text
+*.html text

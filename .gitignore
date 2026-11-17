@@ -18,6 +18,7 @@
 !/PROJECT_GUIDE.md
 !/requirements.txt
 !/.gitignore
+!/.gitattributes
 
 # NOT published: the draft data-request letter carries a real name and contact details, and it is
 # not part of the submission. Personal information does not go into a public repository.
