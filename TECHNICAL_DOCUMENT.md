@@ -112,7 +112,9 @@ ball on the six-yard line at the other end is a goal kick for the side defending
 the touchline is a throw. None of that needs a label and none of it needs this match's data: it
 is the Laws read off the coordinates.
 
-Twelve rules ship. What they are worth on the training matches, leave-one-match-out:
+Thirteen rules are implemented and all thirteen run on the training matches. **Twelve run on the
+competition match**, because the guard described in §5 falsifies one of them on this ball track
+and drops it. What the full set is worth on the training matches, leave-one-match-out:
 
 | | before | after |
 |---|---|---|
@@ -172,8 +174,14 @@ the dataset's own licence, labelled by the provider rather than by us.
 
 Two more IDSSE matches — **J03WMX (1. FC Köln) and J03WN1 (VfL Bochum)** — were sealed at the
 start as a final held-out test, from a different competition with no team in common with the
-development block. **They have never been loaded by any code in this project**, including the
-script that fits the submitted model. They are still sealed.
+development block. **No model was trained, tuned or selected on them, and their labels have never
+been read** — the script that fits the submitted model names them only to state that it does not
+load them.
+
+To be exact rather than absolute: one diagnostic, run after the model was frozen and while
+preparing this document, measured the ball-track repeat share quoted in §5 across all seven IDSSE
+matches. That read their ball coordinates and nothing else. It changed no model and no threshold.
+They remain unused as a test set, which is the thing they were kept for.
 
 ### Why the other 23 matches were prepared and then not used
 
@@ -274,10 +282,11 @@ whistle. Nothing is scored there, so a guess would be noise with no upside.
 **A rule can be measured as correct on the training provider and be false on this one, and the
 cause can be a file-format convention rather than football.**
 
-The training provider **freezes the ball's coordinate while play is stopped**: on 47–51% of
-consecutive observed frames the ball's position is byte-identical to the previous one, so a dead
-ball reads exactly 0.00 m/s. The competition's ATD is uncorrected computer vision that
-re-detects the ball every frame and essentially never repeats a position.
+The training provider **freezes the ball's coordinate while play is stopped**: on **33–55%** of
+consecutive observed frames the ball's position is byte-identical to the previous one — measured
+per half across the five development matches, lowest 32.9%, highest 54.5% — so a dead ball reads
+exactly 0.00 m/s. The competition's ATD is uncorrected computer vision that re-detects the ball
+every frame: the same measurement gives **0.03%** and **0.13%** on its two halves.
 
 Two shipped rules read the ball's speed from one frame difference, and both broke:
 
